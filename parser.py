@@ -682,7 +682,7 @@ class POPxfValidationError(POPxfParserError):
     pass
 
 if __name__ == "__main__":
-    import sys
+    # import sys
     # example = json.load(open('examples/Gam_Wmunum.json'))
 
     # example = json.load(open('examples/R_W_lilj.json'))
@@ -693,111 +693,42 @@ if __name__ == "__main__":
     # from glob import glob
     # bad_files = glob('examples/bad/*.json')
     guy = POPxfParser(example)
-    print(type(guy.observable_uncertainties['total']))
-    sys.exit()
-
-#     bad_files = glob('examples/bad/*.json')
-    bad_files = [
-#       'examples/bad/missing_schema.json',
-#       'examples/bad/missing_metadata.json', 
-#       'examples/bad/missing_basis.json', 
-#       'examples/bad/missing_expression.json', 
-#       'examples/bad/bad_value_parameters.json', 
-#       'examples/bad/bad_value_scale_array_string.json', 
-#       'examples/bad/bad_value_schema.json', 
-#       'examples/bad/missing_scale.json', 
-#       'examples/bad/extra_field.json', 
-#       'examples/bad/empty_data.json', 
-#       'examples/bad/bad_observable_central_key.json', 
-#       'examples/bad/missing_eft.json', 
-#       'examples/bad/missing_data.json', 
-#       'examples/bad/bad_value_scale_string.json', 
-#       'examples/bad/missing_tool_name.json', 
-#       'examples/bad/extra_subfield.json', 
-#       'examples/bad/bad_observable_central_value.json', 
-#       'examples/bad/bad_value_inputs.json',
-#        'examples/bad/bad_value_inputs_mean.json',
-#        'examples/bad/bad_value_inputs_corr_nostd.json',
-#        'examples/bad/missing_field_inputs_dist.json'
-#     #   'examples/bad/bad_length_polynomal_central.json',
-        # 'examples/bad/bad_length_observable_central.json'
-        # 'examples/bad/bad_key_order_observable_central.json'
-        # 'examples/bad/extra_parameter_observable_central.json'
-        # 'examples/bad/extra_parameter_observable_uncertainties.json'
-    ]
     
-    # print(bad_files)
-    for fi in bad_files:
-        print(f"Testing file: {fi}")
-        example = json.load(open(fi))
-        try:
-            guy = POPxfParser(example)
-        except (POPxfValidationError, POPxfParserError) as e:
-            print(e)
-        print("")
-    guy = POPxfParser(example)
-    print(guy.observable_uncertainties["MC stat"])
-    # test_data = {
-    #   "('', '')": [0.22729],
-    #   "('', 'c3pl1')": [-0.0137796],
-    #   "('', 'c3pl2')": [0.0137786],
-    #   "('', 'cll')": [0.0137796],
-    #   "('c3pl1', 'c3pl1')": [0.000208845],
-    #   "('c3pl2', 'c3pl2')": [0.00020885],
-    #   "('cll', 'cll')": [0.00020884],
-    #   "('c3pl1', 'c3pl2')": [-0.00041769],
-    # #   "('c3pl2', 'c3pl1')": [-0.00041769],
-    #   "('c3pl1', 'cll')": [-0.00041768],
-    #   "('c3pl2', 'cll')": [0.00041768]
-    # }
-
-    # test_data ={
-    #   "('', '', 'RR')": [3.63e-09, 1.013e-10],
-    #   "('', 'C10_bdmumu', 'RR')": [0, -4.863e-11],
-    #   "('', 'C10_bsmumu', 'RR')": [-1.743e-09, 0],
-    #   "('', 'C10p_bdmumu', 'RR')": [0, 4.863e-11],
-    #   "('', 'C10p_bsmumu', 'RR')": [1.743e-09, 0],
-    #   "('C10_bdmumu', 'C10_bdmumu', 'II')": [0, 5.835e-12],
-    #   "('C10_bdmumu', 'C10_bdmumu', 'RR')": [0, 5.835e-12],
-    #   "('C10_bdmumu', 'C10p_bdmumu', 'II')": [0, -1.167e-11],
-    #   "('C10_bdmumu', 'C10p_bdmumu', 'RR')": [0, -1.167e-11],
-    #   "('C10_bsmumu', 'C10_bsmumu', 'II')": [1.838e-10, 0],
-    #   "('C10_bsmumu', 'C10_bsmumu', 'RR')": [2.091e-10, 0],
-    #   "('C10_bsmumu', 'C10p_bsmumu', 'II')": [-3.675e-10, 0],
-    #   "('C10_bsmumu', 'C10p_bsmumu', 'RR')": [-4.182e-10, 0],
-    #   "('C10p_bdmumu', 'C10p_bdmumu', 'II')": [0, 5.835e-12],
-    #   "('C10p_bdmumu', 'C10p_bdmumu', 'RR')": [0, 5.835e-12],
-    #   "('C10p_bsmumu', 'C10p_bsmumu', 'II')": [1.838e-10, 0],
-    #   "('C10p_bsmumu', 'C10p_bsmumu', 'RR')": [2.091e-10, 0]
-    # }
-
-    # test_data = {
-    #   "('', '')": [0.227, 0.227, 0.227],
-    #   "('', 'phil3_11')": [7737.419, -19812.903, -19812.903],
-    #   "('', 'phil3_22')": [-19812.903, 7737.419, -19812.903],
-    #   "('', 'phil3_33')": [0, 0, 27550.322],
-    #   "('phil3_11', 'phil3_11')": [929672417.073, 1295705157.301, 1295705157.301],
-    #   "('phil3_11', 'phil3_22')": [1390270692.689, 1390270692.689, 2591410314.602],
-    #   "('phil3_11', 'phil3_33')": [0, 0, -1201139621.914],
-    #   "('phil3_22', 'phil3_22')": [1295705157.301, 929672417.073, 1295705157.301],
-    #   "('phil3_22', 'phil3_33')": [0, 0, -1201139621.914],
-    #   "('phil3_33', 'phil3_33')": [0, 835106881.686]
-    # #   "('phil3_33', 'phil3_33')": [[0, 0, 835106881.686]]
-    # #   "('phil3_33', 'phil3_33')": [0, 0, 835106881.686]
-    # }
-    # print(    POPxfPolynomial.__dict__)
-    # guy = POPxfPolynomial(test_data, degree=2)
-    # print(guy.length )
-    # print(guy.parameters )
-    # print(guy.length, guy.shape )
-
-
-    # test_data = [[6.052e-12]]
-    # guy = POPxfPolynomialUncertainty(test_data, degree=2)
-
-    # print(guy.keys())
-    # # print(guy[('', '')])
-    # print(guy.to_jstr(suppress_RI=True))
-    # print(guy._raw_data)
-    # from typedmapping import TypedMapping
-    # print(TypedMapping.__dict__)
+    print("=" * 70)
+    print("POPxfParser Object Properties")
+    print("=" * 70)
+    
+    print(f"\nSchema Version: {guy.schema_version}")
+    print(f"Mode: {guy.mode}")
+    print(f"Polynomial Order: {guy.polynomial_order}")
+    print(f"Length (number of observables): {guy.length}")
+    
+    print(f"\nParameters: {guy.parameters}")
+    
+    print("\nMetadata Keys:")
+    for key in guy.metadata.keys():
+        print(f"  - {key}")
+    
+    print(f"\nObservable Names: {guy.metadata['observable_names']}")
+    print(f"Scale: {guy.metadata['scale']}")
+    
+    if hasattr(guy, 'observable_central'):
+        print(f"\nObservable Central (type: {type(guy.observable_central).__name__}):")
+        print(f"  - Number of polynomial terms: {len(guy.observable_central)}")
+        print(f"  - Parameters in polynomial: {guy.observable_central.parameters}")
+        print(f"  - Polynomial keys: {list(guy.observable_central.keys())[:5]}{'...' if len(guy.observable_central) > 5 else ''}")
+    
+    if hasattr(guy, 'polynomial_central'):
+        print(f"\nPolynomial Central (type: {type(guy.polynomial_central).__name__}):")
+        print(f"  - Number of polynomial terms: {len(guy.polynomial_central)}")
+        print(f"  - Parameters in polynomial: {guy.polynomial_central.parameters}")
+    
+    if hasattr(guy, 'observable_uncertainties'):
+        print(f"\nObservable Uncertainties:")
+        print(f"  - Number of uncertainty sources: {len(guy.observable_uncertainties)}")
+        for unc_name, unc_obj in guy.observable_uncertainties.items():
+            print(f"  - '{unc_name}' (type: {type(unc_obj).__name__})")
+            print(f"    Parameters: {unc_obj.parameters}")
+            print(f"    Number of terms: {len(unc_obj)}")
+    
+    print("\n" + "=" * 70)
