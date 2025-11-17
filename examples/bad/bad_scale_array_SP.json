@@ -8,7 +8,7 @@
       "definition": "https://feynrules.irmp.ucl.ac.be/wiki/SMEFTatNLO"
       }
     },
-    "scale": 80.387,
+    "scale": [100.0,100.0],
     "parameters": [ "c3pl1", "c3pl2", "cll" ],
     "observable_names": ["Gamma(W -> mu nu_m)"],
     "reproducibility": [{
@@ -21,24 +21,11 @@
           "perturbative_order":"LO" 
         }
       },
-      "inputs": {
-        "m1": 1.0,
-        "('m2','m3')": {
-          "mean": [1.0, 2.0],
-          "std": [0.1, 0.1],
-          "corr": [
-            [1.0, 0.3],
-            [0.3, 1.0]
-          ]
-        },
-        "m4": {
-          "distribution_type": "uniform",
-          "distribution_parameters": {
-            "a": 0,
-            "b": 1
-          },
-          "distribution_description": "Uniform distribution with boundaries $a$ and $b$."
-        }
+      "inputs":{ 
+        "m_W": 80.387,
+        "G_F": 1.1663787e-5,
+        "m_Z": 91.1876,
+        "Lambda":1000 
       }
     }],
     "misc":{

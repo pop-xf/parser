@@ -40,7 +40,7 @@ class POPxfParser(object):
         scale information, and mode-specific fields.
     data : dict
         Data section from the JSON, containing polynomial coefficients.
-    polynomial_order : int
+    polynomial_degree : int
         Degree of the polynomial expansion (default 2 if not specified).
     mode : str
         Operating mode, either 'SP' (Single-Polynomial) or 'FOP' 
@@ -94,6 +94,7 @@ class POPxfParser(object):
 
         self.json = json_data
 
+        # determine schema version from JSON data
         try:
             self.schema_version = json_data["$schema"].split('/')[-1]
         except KeyError as e:
@@ -101,6 +102,7 @@ class POPxfParser(object):
               "POPxf JSON data is missing required '$schema' field."
             ) from None
         
+        # load schema from map defined in schemas.py
         try:
             self.json_schema = schemas[self.schema_version]
         except KeyError:
@@ -111,7 +113,16 @@ class POPxfParser(object):
                 f"{allowed_schemas}"
             ) from None
 
-        self.validator = validators[self.schema_version](self.json_schema)
+        # load validator from map defined in schemas.py
+        try:
+            self.validator = validators[self.schema_version](self.json_schema)
+        except KeyError:
+            allowed_validators = ', '.join([ f"'{v}'" for v in validators.keys() ])
+            raise POPxfParserError(
+                f"Validator for schema version '{self.schema_version}' is not "
+                "recognized. Available versions are: "
+                f"{allowed_validators}"
+            ) from None 
 
         # validate against schema
         self.validate_schema()
@@ -119,21 +130,19 @@ class POPxfParser(object):
         # get metadata and data fields
         self.metadata = self.json["metadata"]
         self.data = self.json["data"]
-        self.polynomial_order = self.metadata.get("polynomial_order", 2)
-
-        # determine mode
-        self.mode = self.get_mode()
-
-        # length of observable
+        # set other useful attributes
+        self.polynomial_degree = self.metadata.get("polynomial_degree", 2)
+        ## determine mode
+        self.mode = "FOP" if "polynomial_names" in self.metadata else "SP"
+        ## length of observable
         self.length = len(self.metadata["observable_names"])
-
-        # parameters
+        ## parameters
         self.parameters = self.metadata["parameters"]
 
-        # validate scale field
-        self.validate_scale(self.mode)
+        # validate other fields beyond schema
+        self.validate_other()
 
-        # set polynomial data
+        # set polynomial data, performs additional validation
         self.set_poly_data()
 
     @classmethod
@@ -192,6 +201,10 @@ class POPxfParser(object):
             elif error.validator == 'pattern':
                 # pattern mismatch
                 msg_suffix = f" pattern for '{path}'"
+            elif error.validator == 'not':
+                # forbidden field present
+                forbidden = ', '.join(error.schema['not']['required'])
+                msg_suffix = f".\n  '{forbidden}' forbidden in '{path}'"
             else:
                 msg_suffix = f" in '{path}'"
             
@@ -241,87 +254,38 @@ class POPxfParser(object):
              f"{self.schema_version}:\n{error_message}"
             ) from None
     
-    def get_mode(self):
+    def validate_other(self):
         """
-        Determine the operating mode of the POPxf JSON data.
-
-        Detects whether the data is in Single-Polynomial (SP) or 
-        Function-Of-Polynomials (FOP) mode based on the presence of 
-        mode-specific fields. Also validates that all required fields for
-        the detected mode are present.
-
-        Returns
-        -------
-        str
-            Operating mode: 'SP' for Single-Polynomial mode or 'FOP' for
-            Function-Of-Polynomials mode.
-
-        Raises
-        ------
-        POPxfValidationError
-            If required fields for the detected mode are missing, or if the
-            mode cannot be determined from the available fields.
-
-        Notes
-        -----
-        **FOP mode** is detected if any of these fields are present:
-        - metadata['polynomial_names']
-        - metadata['observable_expressions']
-        - data['polynomial_central']
-        
-        If FOP mode is detected, all of the above fields must be present.
-        
-        **SP mode** is assumed if 'observable_central' is present in data
-        and no FOP-specific fields are found.
-        
-        The mode determines how observables are computed:
-        - SP: Direct polynomial representation in 'observable_central'
-        - FOP: Computed from 'polynomial_central' using expressions in
-          'observable_expressions'
-
+        Perform additional validations beyond schema checks. Assumes that the 
+        JSON validation check has suceeded and attributes have been set.
         """
-        # required fields for FOP mode
-        FOP_metadata_fields = [ "polynomial_names", "observable_expressions"]
-        FOP_data_fields = [ "polynomial_central" ]
+        # validate scale field
+        self.validate_scale()
 
-        if (
-          any(fld in self.metadata for fld in FOP_metadata_fields) or 
-          any(fld in self.data for fld in FOP_data_fields)
-        ):
-            # any of the required FOP fields are present
-            mode = 'FOP'
-            # check that all required fields are present
-            missing_fields_metadata = [
-              fld for fld in FOP_metadata_fields
-              if fld not in self.metadata
-            ] 
-            missing_fields_data = [
-              fld for fld in FOP_data_fields
-              if fld not in self.data
-            ]
-            if missing_fields_metadata:
+
+    def validate_scale(self):
+        scale = self.metadata["scale"]
+        if isinstance(scale, (int, float)):
+            # scale is just a number
+            return None
+        elif self.mode == 'SP':
+            # length matches observable_names
+            if len(scale) != len(self.metadata["observable_names"]):
                 raise POPxfValidationError(
-                  "POPxf JSON data is missing required metadata fields for "
-                  "function-of-polynomials (FOP) mode: "
-                 f"{', '.join(missing_fields_metadata)}"
+                    "Lengths of array-valued 'scale' and "
+                    "'observable_names' metadata fields must match in "
+                    "single-polynomial (SP) mode."
                 )
-            if missing_fields_data:
+        elif self.mode == 'FOP':
+            # length matches polynomial_names
+            if len(scale) != len(self.metadata["polynomial_names"]):
                 raise POPxfValidationError(
-                  "POPxf JSON data is missing required data fields for "
-                  "function-of-polynomials (FOP) mode: "
-                 f"{', '.join(missing_fields_data)}"
+                    "Lengths of array-valued 'scale' and "
+                    "'polynomial_names' metadata fields must match in "
+                    "function-of-polynomials (FOP) mode."
                 )
-        elif "observable_central" in self.data:
-            mode = 'SP'
-        else:
-            raise POPxfValidationError(
-              "POPxf JSON data is missing required metadata keys to "
-              "determine mode (either SP or FOP). See documentation."
-            )
-            
-        return mode
-    
-    def validate_scale(self, mode):
+
+    def validate_scale_old(self, mode):
         """
         Validate the 'scale' field in metadata for consistency with mode and data.
 
@@ -338,7 +302,7 @@ class POPxfParser(object):
         ------
         POPxfValidationError
             If the scale field is inconsistent with the mode or data fields:
-            - In SP mode: array length must match observable_central length
+            - In SP mode: array length must match observable_names length
             - In FOP mode: array length must match polynomial_names length
             - In FOP mode with array scale: observable_central must be absent
             - In FOP mode with array scale: observable_uncertainties must be
@@ -371,11 +335,11 @@ class POPxfParser(object):
         else:
             # scale is array-valued
             if mode == 'SP':
-                # length matches observable_central
-                if len(scale) != len(self.data["observable_central"]):
+                # length matches observable_names
+                if len(scale) != len(self.metadata["observable_names"]):
                     raise POPxfValidationError(
                       "Lengths of array-valued 'scale' and "
-                      "'observable_central' metadata fields must match in "
+                      "'observable_names' metadata fields must match in "
                       "single-polynomial (SP) mode."
                     )
             elif mode == 'FOP':
@@ -407,8 +371,8 @@ class POPxfParser(object):
                     # strange parameter independent specification
 
                     if not is_param_indep:
-                        example = ", ".join(["''"]*self.polynomial_order)
-                        example_2 = example + ", " + 'R'*self.polynomial_order
+                        example = ", ".join(["''"]*self.polynomial_degree)
+                        example_2 = example + ", " + 'R'*self.polynomial_degree
                         raise POPxfValidationError(
                           "'observable_uncertainties' data field must be "
                           "absent or only specify parameter-independent "
@@ -416,6 +380,7 @@ class POPxfParser(object):
                           "function-of-polynomials (FOP) mode. For example, "
                          f"({example}) or ({example_2})."
                         )
+                    
     def raise_polynomial_error(self, exception, msg_prefix):
         """
         Raise a POPxfValidationError with enhanced messaging for polynomial errors.
@@ -485,7 +450,7 @@ class POPxfParser(object):
             reason = (
               ":\n Polynomial keys should be stringified tuples with "
              f"length matching metadata.polynomial_degree "
-             f"({self.polynomial_order}) and an optional real/imaginary "
+             f"({self.polynomial_degree}) and an optional real/imaginary "
               "specifier string of the same length as the last element."
             )
         else:
@@ -546,7 +511,7 @@ class POPxfParser(object):
            - Uncertainties: must match length of metadata['observable_names']
         
         2. **Key/value format**: Validated by POPxfPolynomial constructor
-           - Keys must be tuples matching polynomial_order
+           - Keys must be tuples matching polynomial_degree
            - Values must be 1D numerical arrays
            - Keys must be alphabetically ordered
         
@@ -573,7 +538,7 @@ class POPxfParser(object):
             try:
                 observable_central = POPxfPolynomial(
                   self.data["observable_central"],
-                  degree=self.polynomial_order,
+                  degree=self.polynomial_degree,
                   length=self.length
                 )
             except (POPxfPolynomial.init_error) as e:
@@ -593,7 +558,7 @@ class POPxfParser(object):
             try:
                 polynomial_central = POPxfPolynomial(
                   self.data["polynomial_central"],
-                  degree=self.polynomial_order,
+                  degree=self.polynomial_degree,
                   length=len(self.metadata["polynomial_names"])
                 )
             except (POPxfPolynomial.init_error) as e:
@@ -615,7 +580,7 @@ class POPxfParser(object):
                 try:
                     observable_uncertainty = POPxfPolynomialUncertainty(
                       v,
-                      degree=self.polynomial_order,
+                      degree=self.polynomial_degree,
                       length=self.length 
                     )
                     
@@ -667,7 +632,7 @@ class POPxfParser(object):
         else:
             result.write("\nMode: Function-Of-Polynomials (FOP)\n")
 
-        result.write(f"Polynomial Order: {self.polynomial_order}\n")
+        result.write(f"Polynomial Order: {self.polynomial_degree}\n")
         result.write(f"Length (number of observables): {self.length}\n")        
         result.write(f"Observable Names: {self.metadata['observable_names']}\n")
         result.write(f"Parameters: {self.parameters}\n")
@@ -747,17 +712,40 @@ class POPxfValidationError(POPxfParserError):
     pass
 
 if __name__ == "__main__":
+    pass
     # import sys
     # example = json.load(open('examples/Gam_Wmunum.json'))
 
-    example = json.load(open('examples/R_W_lilj.json'))
+    # example = json.load(open('examples/R_W_lilj.json'))
     # example = json.load(open('examples/BR_Bs_mumu_B0_mumu.json'))
     # example = json.load(open('examples/BR_Bs_mumu.json'))
     # example = json.load(open('examples/BR_B0_mumu.json'))
-    
+    # example = json.load(open('examples/bad/missing_polynomial_names.json'))
+    # example = json.load(open('examples/bad/missing_observable_expressions.json'))
+    # example = json.load(open('examples/bad/bad_scale_array_SP.json'))
+   # 
     # from glob import glob
     # bad_files = glob('examples/bad/*.json')
-    guy = POPxfParser(example)
+    # guy = POPxfParser(example)
     
-    print(guy.info())
+    # print(guy.info())
 
+    # test_data = {
+    #   "('', '')": [0.22729],
+    #   "('', 'c3pl1')": [-0.0137796],
+    #   "('', 'c3pl2')": [0.0137786],
+    #   "('', 'cll')": [0.0137796],
+    #   "('c3pl1', 'c3pl1')": [0.000208845],
+    #   "('c3pl2', 'c3pl2')": [0.00020885],
+    #   "('cll', 'cll')": [0.00020884],
+    #   "('c3pl1', 'c3pl2')": [-0.00041769],
+    #   "('c3pl1', 'cll')": [-0.00041768],
+    #   "('c3pl2', 'cll')": [0.00041768],
+    #   "('RR', 'c3pl2')": [0.00041768]
+    # }
+
+    # POPxfPolynomial(
+    #   test_data,
+    #   degree=2,
+    #   length=1
+    # )

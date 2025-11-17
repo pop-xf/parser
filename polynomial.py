@@ -1,5 +1,6 @@
 import json
 import numpy as np
+from ast import literal_eval
 from typedmapping import TypedMapping, TypedMappingMeta
 from formatting import pretty_json_string
 
@@ -93,12 +94,12 @@ class POPxfPolynomial(TypedMapping, metaclass=POPxfPolynomialMeta):
     --------
     >>> data = {
     ...     ('',''): [1.0, 2.0, 3.0],
-    ...     ('cHq3', ''): [0.1, 0.2, 0.3],
-    ...     ('cHq3', 'cHq1'): [0.01, 0.02, 0.03]
+    ...     ('C1', ''): [0.1, 0.2, 0.3],
+    ...     ('C1', 'C2'): [0.01, 0.02, 0.03]
     ... }
     >>> poly = POPxfPolynomial(data, degree=2, length=3)
     >>> print(poly.parameters)
-    ('cHq1', 'cHq3')
+    ('C1', 'C2')
     
     See Also
     --------
@@ -206,7 +207,7 @@ class POPxfPolynomial(TypedMapping, metaclass=POPxfPolynomialMeta):
         If the real/imaginary specifier is not present, parameters are assumed 
         to be real.
 
-        If the key is a string, it is converted to a tuple via `eval()`.
+        If the key is a string, it is converted to a tuple via `ast.literal_eval()`.
 
         Parameters
         ----------
@@ -227,28 +228,89 @@ class POPxfPolynomial(TypedMapping, metaclass=POPxfPolynomialMeta):
 
         """
         
-        tuplekey = eval(key) if isinstance(key, str) else key
+        tuplekey = literal_eval(key) if isinstance(key, str) else key
+
+        # Handle optional real/imaginary specifier
+        if len(tuplekey) == self.degree:
+            params, RI_str = tuplekey, None
+        elif len(tuplekey) == self.degree + 1:
+            params, RI_str = tuplekey[:-1], tuplekey[-1]
+        else:
+            raise self.key_error(
+              f'Invalid key {key}: number of elements must be either equal to '
+              f'the polynomial degree ({self.degree}) or one more than the '
+              'polynomial degree (including real/imaginary specifier).'
+            )
+        
+        if sorted(params) != list(params):
+            raise self.key_order_error(
+              f'Parameters {params} must be ordered alphabetically in '
+              f'{tuplekey}.'
+            )
+        else:
+            return super()._parse_key(tuplekey)
+
+    def _parse_key_old(self, key):
+        """
+        Parse key, checking it is valid and return as a tuple.
+
+        `key` must be a tuple of strings. The first n elements represent  
+        polynomial parameters. Optionally the last element can be a length-n 
+        string where each element can only be 'R' or 'I', stating whether the
+        real or imaginary component of each coefficient is being referenced. 
+        The constant term in the polynomial is specified by a tuple of empty 
+        strings. Elements should be ordered alphabetically by convention. 
+        If the real/imaginary specifier is not present, parameters are assumed 
+        to be real.
+
+        If the key is a string, it is converted to a tuple via `ast.literal_eval()`.
+
+        Parameters
+        ----------
+        key : tuple
+            Key to parse, checking validity as described above.
+        
+        Returns
+        -------
+        tuple
+            Parsed key as a tuple of three strings.
+        
+        Raises
+        ------
+        self.key_error
+            If the key is not a valid tuple as described above.
+        self.key_order_error
+            If the parameters in the key are not ordered alphabetically.
+
+        Notes
+        -----
+        Most of the checks should automatically be checked by the JSON schema 
+        validation step, so they could be skipped in principle. Only the 
+        ordering check on the parameter names is not covered by the schema. 
+        """
+        
+        tuplekey = literal_eval(key) if isinstance(key, str) else key
 
         if not isinstance(tuplekey, tuple) or not tuplekey:
             raise self.key_error(
               f'Invalid key {key}: must be a non-empty tuple or string that '
-               'returns a non empty-tuple via eval().'
+               'returns a non empty-tuple via literal_eval().'
             ) from None
         
         # Handle optional real/imaginary specifier
-        if not self.is_RI(tuplekey[-1]):
-            # tuplekey = tuple( list(tuplekey) + ['R'*self.degree] )
+        if len(tuplekey) == self.degree:
             params, RI_str = tuplekey, None
-        else:
+        elif len(tuplekey) == self.degree + 1:
             params, RI_str = tuplekey[:-1], tuplekey[-1]
+        else:
+            raise self.key_error(
+              f'Invalid key {key}: number of elements must be either equal to '
+              f'the polynomial degree ({self.degree}) or one more than the '
+              'polynomial degree (including real/imaginary specifier).'
+            )
 
         # ensure formatting of key conforms to specification
-        if not params:
-            raise self.key_error(
-              f'Invalid key {key}: must contain at least one element before '
-              'the real/imaginary specifier string.'
-            )
-        elif not all( isinstance(x, str) for x in params ):
+        if not all( isinstance(x, str) for x in params ):
             raise self.key_error(
               f'Invalid key {key}: all elements must be strings.'
             )
@@ -257,16 +319,11 @@ class POPxfPolynomial(TypedMapping, metaclass=POPxfPolynomialMeta):
               f'Invalid key {key}: number of parameters ({len(params)}) '
               f'must match polynomial degree ({self.degree}).'
             )
-        elif any( self.is_RI(x) for x in params ):
-            raise self.key_error(
-              f'Invalid key {key}: can ony contain a single real/imaginary '
-              'specifier string as the last element.'
-            )
         elif RI_str is not None and len(params)!=len(RI_str):
             raise self.key_error(
               f'Invalid key {key}: Length of real/imaginary specifier string ' 
-              f'(currently {len(RI_str)}) must match the number of preceding '
-              f'parameters ({len(params)}).'
+              f'(currently {len(RI_str)}) must match the specified degree of '
+              f'the polynomial ({self.degree}).'
             )
         elif sorted(params) != list(params):
             raise self.key_order_error(
