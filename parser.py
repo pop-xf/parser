@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import json
 import jsonschema
+from io import StringIO
 from jsonschema.exceptions import ValidationError
 from schemas import schemas, validators
 from polynomial import POPxfPolynomial, POPxfPolynomialUncertainty
@@ -632,6 +633,70 @@ class POPxfParser(object):
                     )
                     self.raise_polynomial_error(e, msg)
 
+    def info(self):
+        """
+        Generate a summary string of the POPxfParser object's properties.
+
+        Returns
+        -------
+        str
+            Formatted string summarizing the parser's properties, including
+            schema version, mode, polynomial order, number of observables,
+            parameters, metadata keys, and details about central values and
+            uncertainties.
+        """
+
+        result = StringIO()
+
+        result.write("=" * 70 + "\n")
+        result.write("POPxfParser Object Properties\n")
+        result.write("=" * 70 + "\n")
+        
+        result.write(f"\nSchema version: {self.schema_version}\n")
+
+        result.write("\nmetadata keys:\n")
+        for key in self.metadata.keys():
+            result.write(f"  - {key}\n")
+        
+        result.write("\ndata keys:\n")
+        for key in self.data.keys():
+            result.write(f"  - {key}\n")
+
+        if self.mode == 'SP':
+            result.write("\nMode: Single-Polynomial (SP)\n")
+        else:
+            result.write("\nMode: Function-Of-Polynomials (FOP)\n")
+
+        result.write(f"Polynomial Order: {self.polynomial_order}\n")
+        result.write(f"Length (number of observables): {self.length}\n")        
+        result.write(f"Observable Names: {self.metadata['observable_names']}\n")
+        result.write(f"Parameters: {self.parameters}\n")
+        result.write(f"Scale: {self.metadata['scale']} [GeV]\n")
+        if self.mode == 'FOP':
+            result.write("\nFOP data:\n")
+            result.write(f"  - Number of polynomials: {len(self.metadata.get('polynomial_names', []))}\n")
+            result.write("  - Polynomial names: " + ", ".join(self.metadata.get('polynomial_names', [])) + "\n")
+            result.write(f"\nPolynomial Central (type: {type(self.polynomial_central).__name__}):\n")
+            result.write(f"  - Number of polynomial terms: {len(self.polynomial_central)}\n")
+            result.write(f"  - Parameters in polynomial: {self.polynomial_central.parameters}\n")
+
+        if hasattr(self, 'observable_central'):
+            result.write(f"\nObservable Central (type: {type(self.observable_central).__name__}):\n")
+            result.write(f"  - Number of polynomial terms: {len(self.observable_central)}\n")
+            result.write(f"  - Parameters in polynomial: {self.observable_central.parameters}\n")
+            result.write(f"  - Polynomial keys: {list(self.observable_central.keys())[:5]}{'...' if len(self.observable_central) > 5 else ''}\n")
+            
+        if hasattr(self, 'observable_uncertainties'):
+            result.write(f"\nObservable Uncertainties:\n")
+            result.write(f"  - Number of uncertainty sources: {len(self.observable_uncertainties)}\n")
+            for unc_name, unc_obj in self.observable_uncertainties.items():
+                result.write(f"  - '{unc_name}' (type: {type(unc_obj).__name__})\n")
+                result.write(f"    Parameters: {unc_obj.parameters}\n")
+                result.write(f"    Number of terms: {len(unc_obj)}\n")
+        
+        result.write("\n" + "=" * 70)
+
+        return result.getvalue()
             
 class POPxfParserError(Exception):
     """
@@ -685,51 +750,14 @@ if __name__ == "__main__":
     # import sys
     # example = json.load(open('examples/Gam_Wmunum.json'))
 
-    # example = json.load(open('examples/R_W_lilj.json'))
+    example = json.load(open('examples/R_W_lilj.json'))
     # example = json.load(open('examples/BR_Bs_mumu_B0_mumu.json'))
     # example = json.load(open('examples/BR_Bs_mumu.json'))
-    example = json.load(open('examples/BR_B0_mumu.json'))
+    # example = json.load(open('examples/BR_B0_mumu.json'))
     
     # from glob import glob
     # bad_files = glob('examples/bad/*.json')
     guy = POPxfParser(example)
     
-    print("=" * 70)
-    print("POPxfParser Object Properties")
-    print("=" * 70)
-    
-    print(f"\nSchema Version: {guy.schema_version}")
-    print(f"Mode: {guy.mode}")
-    print(f"Polynomial Order: {guy.polynomial_order}")
-    print(f"Length (number of observables): {guy.length}")
-    
-    print(f"\nParameters: {guy.parameters}")
-    
-    print("\nMetadata Keys:")
-    for key in guy.metadata.keys():
-        print(f"  - {key}")
-    
-    print(f"\nObservable Names: {guy.metadata['observable_names']}")
-    print(f"Scale: {guy.metadata['scale']}")
-    
-    if hasattr(guy, 'observable_central'):
-        print(f"\nObservable Central (type: {type(guy.observable_central).__name__}):")
-        print(f"  - Number of polynomial terms: {len(guy.observable_central)}")
-        print(f"  - Parameters in polynomial: {guy.observable_central.parameters}")
-        print(f"  - Polynomial keys: {list(guy.observable_central.keys())[:5]}{'...' if len(guy.observable_central) > 5 else ''}")
-    
-    if hasattr(guy, 'polynomial_central'):
-        print(f"\nPolynomial Central (type: {type(guy.polynomial_central).__name__}):")
-        print(f"  - Number of polynomial terms: {len(guy.polynomial_central)}")
-        print(f"  - Parameters in polynomial: {guy.polynomial_central.parameters}")
-    
-    if hasattr(guy, 'observable_uncertainties'):
-        print(f"\nObservable Uncertainties:")
-        print(f"  - Number of uncertainty sources: {len(guy.observable_uncertainties)}")
-        for unc_name, unc_obj in guy.observable_uncertainties.items():
-            print(f"  - '{unc_name}' (type: {type(unc_obj).__name__})")
-            print(f"    Parameters: {unc_obj.parameters}")
-            print(f"    Number of terms: {len(unc_obj)}")
-    
-    print("\n" + "=" * 70)
+    print(guy.info())
 

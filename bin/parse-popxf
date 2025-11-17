@@ -1,0 +1,247 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+Command-line POPxf Parser for validating and inspecting POPxf JSON files.
+
+This tool reads POPxf JSON files, validates them against the schema,
+and provides detailed information about the parsed data.
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import parser module
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from parser import POPxfParser, POPxfParserError, POPxfValidationError
+
+
+def parse_arguments():
+    """
+    Parse command-line arguments.
+    
+    Returns
+    -------
+    argparse.Namespace
+        Parsed arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description='Validate and parse POPxf JSON files.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s input.json
+  %(prog)s input.json --verbose
+  %(prog)s input.json --quiet
+  %(prog)s input.json --show-data
+        """
+    )
+    
+    parser.add_argument(
+        'input_file',
+        type=str,
+        help='Path to the POPxf JSON file to parse'
+    )
+    
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Print detailed information about the parsed data'
+    )
+    
+    parser.add_argument(
+        '-q', '--quiet',
+        action='store_true',
+        help='Suppress output (only show errors)'
+    )
+    
+    parser.add_argument(
+        '--show-data',
+        action='store_true',
+        help='Display polynomial data (can be large)'
+    )
+    
+    parser.add_argument(
+        '--show-uncertainties',
+        action='store_true',
+        help='Display uncertainty information'
+    )
+    
+    return parser.parse_args()
+
+
+def print_parser_info(
+  parser_obj, 
+  verbose=False, 
+  show_data=False, 
+  show_uncertainties=False
+):
+    """
+    Print information about the parsed POPxf data.
+    
+    Parameters
+    ----------
+    parser_obj : POPxfParser
+        The parsed POPxf object.
+    verbose : bool, optional
+        If True, print detailed information.
+    show_data : bool, optional
+        If True, display polynomial coefficients.
+    show_uncertainties : bool, optional
+        If True, display uncertainty details.
+    """
+    # Print basic info from the info() method
+    print(parser_obj.info())
+    
+    # Additional verbose information
+    if verbose:
+        if parser_obj.mode == 'FOP' and 'observable_expressions' in parser_obj.metadata:
+            print(f"\nObservable Expressions:")
+            for i, (obs, expr) in enumerate(zip( 
+              parser_obj.metadata['observable_names'], 
+              parser_obj.metadata['observable_expressions']
+            )):
+                print(f"  [{obs}] {expr}")
+        
+        if 'reproducibility' in parser_obj.metadata:
+            print(f"\nReproducibility Information:")
+            repro = parser_obj.metadata['reproducibility']
+            if isinstance(repro, dict):
+                for key, value in repro.items():
+                    print(f"  - {key}: {value}")
+            elif isinstance(repro, list):
+                for item in repro:
+                    print(f"  - {item}")
+            else:
+                print(f"  {repro}")
+    
+    # Show polynomial data if requested
+    if show_data:
+        if parser_obj.mode == 'SP' and hasattr(parser_obj, 'observable_central'):
+            print(f"\nObservable Central - Polynomial Coefficients:")
+            for key, value in parser_obj.observable_central.items():
+                print(f"  {key}: {value}")
+        
+        if parser_obj.mode == 'FOP' and hasattr(parser_obj, 'polynomial_central'):
+            print(f"\nPolynomial Central - Coefficients:")
+            for key, value in parser_obj.polynomial_central.items():
+                print(f"  {key}: {value}")
+    
+    # Show detailed uncertainty information if requested
+    if show_uncertainties: 
+        if hasattr(parser_obj, 'observable_uncertainties'):
+            print(f"\nUncertainty Information:")
+            for unc_name, unc_obj in parser_obj.observable_uncertainties.items():
+                print(f"\n'{unc_name}':")
+                print(f"  - Type: {type(unc_obj).__name__}")
+                print(f"  - Number of terms: {len(unc_obj)}")
+                print(f"  - Parameters: {unc_obj.parameters if unc_obj.parameters else 'parameter-independent'}")
+                
+                if show_data:
+                    print(f"  - Coefficients:")
+                    for key, value in unc_obj.items():
+                        print(f"    {key}: {value}")
+        else:
+            print("\nNo uncertainty information available.")
+    # Success message
+    print("\n" + "=" * 70)
+    print("✓ Validation successful")
+    print("=" * 70 + "\n")
+
+
+def main():
+    """
+    Main entry point for the command-line tool.
+    
+    Returns
+    -------
+    int
+        Exit code (0 for success, 1 for error).
+    """
+    args = parse_arguments()
+    
+    # Check for conflicting arguments
+    if args.quiet and args.verbose:
+        print("Error: --quiet and --verbose are mutually exclusive", file=sys.stderr)
+        return 1
+    
+    # Read JSON file
+    try:
+        print(f"Reading JSON file: {args.input_file}")
+        input_path = Path(args.input_file)
+        
+        if not input_path.exists():
+            print(f"Error: File not found: {args.input_file}", file=sys.stderr)
+            return 1
+        
+        if not input_path.is_file():
+            print(f"Error: Not a file: {args.input_file}", file=sys.stderr)
+            return 1
+        
+        with open(input_path, 'r') as f:
+            json_data = json.load(f)
+    
+    except IOError as e:
+        print(f"Error: Failed to read file: {e}", file=sys.stderr)
+        return 1
+    
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON format:", file=sys.stderr)
+        print(f"  Line {e.lineno}, Column {e.colno}: {e.msg}", file=sys.stderr)
+        return 1
+    
+    # Parse POPxf file
+    try:
+        parser_obj = POPxfParser(json_data)
+        
+        # Print information unless quiet mode
+        if not args.quiet:
+            print_parser_info(
+                parser_obj,
+                verbose=args.verbose,
+                show_data=args.show_data,
+                show_uncertainties=args.show_uncertainties
+            )
+        else:
+            # In quiet mode, just indicate success
+            print(f"✓ {args.input_file} is valid")
+        
+        return 0
+    
+    except POPxfValidationError as e:
+        print(f"\n{'='*70}", file=sys.stderr)
+        print("POPxf Validation Error", file=sys.stderr)
+        print(f"{'='*70}", file=sys.stderr)
+        print(f"\n{e}\n", file=sys.stderr)
+        print(f"{'='*70}\n", file=sys.stderr)
+        return 1
+    
+    except POPxfParserError as e:
+        print(f"\n{'='*70}", file=sys.stderr)
+        print("POPxf Parser Error", file=sys.stderr)
+        print(f"{'='*70}", file=sys.stderr)
+        print(f"\n{e}\n", file=sys.stderr)
+        print(f"{'='*70}\n", file=sys.stderr)
+        return 1
+    
+    except Exception as e:
+        print(f"\n{'='*70}", file=sys.stderr)
+        print("Unexpected Error", file=sys.stderr)
+        print(f"{'='*70}", file=sys.stderr)
+        print(f"\nAn unexpected error occurred: {e}", file=sys.stderr)
+        print(f"Type: {type(e).__name__}\n", file=sys.stderr)
+        
+        if args.verbose:
+            import traceback
+            print("Traceback:", file=sys.stderr)
+            traceback.print_exc()
+        
+        print(f"{'='*70}\n", file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())
