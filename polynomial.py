@@ -423,7 +423,7 @@ class POPxfPolynomial(TypedMapping, metaclass=POPxfPolynomialMeta):
 
         source = self if not use_raw else self._raw_data
         for key, val in source.items():
-            if suppress_RI and self.is_RI(key[-1]):
+            if suppress_RI and len(key)==self.degree+1:
                 key = key[:-1]
             result[str(key)] = (
               val.tolist() if isinstance(val, np.ndarray) else val

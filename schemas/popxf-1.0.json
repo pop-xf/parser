@@ -13,7 +13,7 @@
     "monomialKeyPatternDeg1": {
       "type": "object",
       "propertyNames": {
-        "pattern": "^\\(\\s*'[^']*'\\s*,\\s*('[IR]')?\\s*,?\\s*\\)$"
+        "pattern": "^\\(\\s*'[^']*'\\s*,\\s*('[IR]'\\s*,?)?\\s*\\)$"
       }
     },
     "monomialKeyPatternDeg2": {
@@ -39,6 +39,9 @@
       "propertyNames": {
         "pattern": "^\\(\\s*('[^']*'\\s*,\\s*){4}'[^']*'(\\s*,\\s*'[IR]{5}')?\\s*,?\\s*\\)$"
       }
+    },
+    "stringifiedTuplePattern": {
+      "pattern": "^\\(\\s*'[^']*'\\s*(,|(,\\s*'[^']*'\\s*)+\\s*,?)\\s*\\)$"
     }
   },
   "type": "object",
@@ -511,7 +514,7 @@
         "observable_uncertainties": {
           "type": "object",
           "minProperties": 1,
-          "description": "An object representing the uncertainties on the polynomial coefficients for the expanded observables. The fields specify the nature of quoted uncertainty. In many cases there may only be a single top-level field, `\"total\"`, but multiple fields can be used to specify a breakdown into several sources of uncertainty (e.g., statistical, scale, PDF, ...). The values can either be an object or an array of floats. Objects must have the same structure as `observable_central`, arrays must have length $M$. If instead of an object, an array of floats is specified, it is assumed to correspond to the parameter independent uncertainty only (e.g. the uncertainty on the SM prediction). This would be equivalent to specifying an object with the single key, `\"('', '')\"`, matching the number of empty strings in the tuple to `metadata.polynomial_degree`.",
+          "description": "An object representing the uncertainties on the polynomial coefficients for the expanded observables. The fields specify the nature of quoted uncertainty. In many cases there may only be a single top-level field, `\"total\"`, but multiple fields can be used to specify a breakdown into several sources of uncertainty (e.g., statistical, scale, PDF, ...). To avoid mistakes, the names of the top-level fields must not have the format of a monomial key (i.e., stringified tuples as defined above). The values of the top-level fields can either be an object or an array of floats. Objects must have the same structure as `observable_central`, arrays must have length $M$. If instead of an object, an array of floats is specified, it is assumed to correspond to the parameter independent uncertainty only (e.g. the uncertainty on the SM prediction). This would be equivalent to specifying an object with the single key, `\"('', '')\"`, matching the number of empty strings in the tuple to `metadata.polynomial_degree`.",
           "additionalProperties": {
             "oneOf": [
               {
@@ -673,6 +676,11 @@
                 "$ref": "#/$defs/monomialKeyPatternDeg2"
               },
               "^observable_uncertainties$": {
+                "propertyNames": {
+                  "not": {
+                    "$ref": "#/$defs/stringifiedTuplePattern"
+                  }
+                },
                 "additionalProperties": {
                   "oneOf": [
                     {
@@ -708,6 +716,11 @@
                 "$ref": "#/$defs/monomialKeyPatternDeg1"
               },
               "^observable_uncertainties$": {
+                "propertyNames": {
+                  "not": {
+                    "$ref": "#/$defs/stringifiedTuplePattern"
+                  }
+                },
                 "additionalProperties": {
                   "oneOf": [
                     {
@@ -742,6 +755,11 @@
                 "$ref": "#/$defs/monomialKeyPatternDeg3"
               },
               "^observable_uncertainties$": {
+                "propertyNames": {
+                  "not": {
+                    "$ref": "#/$defs/stringifiedTuplePattern"
+                  }
+                },
                 "additionalProperties": {
                   "oneOf": [
                     {
@@ -776,6 +794,11 @@
                 "$ref": "#/$defs/monomialKeyPatternDeg4"
               },
               "^observable_uncertainties$": {
+                "propertyNames": {
+                  "not": {
+                    "$ref": "#/$defs/stringifiedTuplePattern"
+                  }
+                },
                 "additionalProperties": {
                   "oneOf": [
                     {
@@ -810,6 +833,11 @@
                 "$ref": "#/$defs/monomialKeyPatternDeg5"
               },
               "^observable_uncertainties$": {
+                "propertyNames": {
+                  "not": {
+                    "$ref": "#/$defs/stringifiedTuplePattern"
+                  }
+                },
                 "additionalProperties": {
                   "oneOf": [
                     {
