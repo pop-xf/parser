@@ -167,9 +167,8 @@ class POPxfPolynomial(TypedMapping, metaclass=POPxfPolynomialMeta):
         # tuple of parameters on which the polynomial depends
         self.parameters = tuple(sorted(list(set([ 
           x for y in
-          [list(i) for i in self.keys()]
-          for x in y 
-          if (x and not self.is_RI(x))
+          [list(i) if len(i)==self.degree else list(i[:-1]) for i in self.keys()]
+          for x in y if x 
         ]))))
     
     @staticmethod

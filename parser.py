@@ -7,6 +7,10 @@ from io import StringIO
 from jsonschema.exceptions import ValidationError
 from schemas import schemas, validators
 from polynomial import POPxfPolynomial, POPxfPolynomialUncertainty
+#TODO:
+# implement evaluate()
+# implement serialization back to JSON
+# implement uncertainty treatment to get covariance matrices, etc.
 
 class POPxfParser(object):
     """
@@ -712,21 +716,22 @@ class POPxfValidationError(POPxfParserError):
     pass
 
 if __name__ == "__main__":
-    pass
+    # pass
     # import sys
     # example = json.load(open('examples/Gam_Wmunum.json'))
 
-    # example = json.load(open('examples/R_W_lilj.json'))
+    example = json.load(open('examples/R_W_lilj.json'))
     # example = json.load(open('examples/BR_Bs_mumu_B0_mumu.json'))
     # example = json.load(open('examples/BR_Bs_mumu.json'))
     # example = json.load(open('examples/BR_B0_mumu.json'))
     # example = json.load(open('examples/bad/missing_polynomial_names.json'))
     # example = json.load(open('examples/bad/missing_observable_expressions.json'))
-    # example = json.load(open('examples/bad/bad_scale_array_SP.json'))
+    # example = json.load(open('examples/bad/bad_observable_uncertainties_scale_array_FOP.json'))
    # 
     # from glob import glob
     # bad_files = glob('examples/bad/*.json')
-    # guy = POPxfParser(example)
+    guy = POPxfParser(example)
+    print(guy.parameters)
     
     # print(guy.info())
 
