@@ -1,5 +1,5 @@
 import json
-from jsonschema.validators import Draft202012Validator
+from jsonschema.validators import Draft7Validator,Draft202012Validator
 import os
 from glob import glob
 """
@@ -13,6 +13,7 @@ validators = {}
 
 # Map of known $schema URIs to their corresponding jsonschema Validator classes
 known_validators = {
+  "http://json-schema.org/draft-07/schema#": Draft7Validator,
   "https://json-schema.org/draft/2020-12/schema": Draft202012Validator
 }
 
