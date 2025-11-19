@@ -120,6 +120,7 @@ def print_error(e):
     print(f"{type(e).__name__}", file=sys.stderr)
     print(f"{'='*70}", file=sys.stderr)
     print(f"\n{e}\n", file=sys.stderr)
+    print(f"{'='*70}", file=sys.stderr)
 
 def main():
     """
@@ -145,6 +146,8 @@ def main():
         
         # Print information unless quiet mode
         if not args.quiet:
+            print(f"{'='*70}")
+            print(f"✓ {args.input_file} is valid")
             print_parser_info(
                 parser_obj,
                 verbose=args.verbose,
@@ -153,6 +156,7 @@ def main():
             )
         else:
             # In quiet mode, just indicate success
+            print(f"{'='*70}")
             print(f"✓ {args.input_file} is valid")
             print(f"{'='*70}")
         
@@ -176,8 +180,6 @@ def main():
         
         print(f"{'='*70}\n", file=sys.stderr)
         return 1
-    # finally:
-    #     print(f"{'='*70}")
 
 
 if __name__ == '__main__':

@@ -112,46 +112,22 @@ $ python bin/validate-popxf examples/BR_B0_mumu.json
 ======================================================================
 Reading JSON file: examples/BR_B0_mumu.json
 ======================================================================
+✓ examples/BR_B0_mumu.json is valid
 ======================================================================
 POPxfParser Object Properties
 ======================================================================
 
 Schema version: popxf-1.0.json
 
-metadata keys:
-  - basis
-  - scale
-  - parameters
-  - observable_names
-  - reproducibility
-  - misc
-
-data keys:
-  - observable_central
-  - observable_uncertainties
-
 Mode: Single-Polynomial (SP)
-Polynomial Order: 2
+Polynomial Degree: 2
 Length (number of observables): 1
 Observable Names: ['BR(B0->mumu)']
 Parameters: ['C10_bdmumu', 'C10p_bdmumu']
 Scale: 4.8 [GeV]
 
-Observable Central:
-  - Parameters: ('C10_bdmumu', 'C10p_bdmumu')
-  - Number of polynomial terms: 9
-  - Polynomial keys: [('', '', 'RR'), ('', 'C10_bdmumu', 'RR'), ('', 'C10p_bdmumu', 'RR'), ('C10_bdmumu', 'C10_bdmumu', 'II'), ('C10_bdmumu', 'C10_bdmumu', 'RR')]...
-
-Observable Uncertainties:
-  - Number of uncertainty sources: 1
-  - 'total':
-    Parameters: ('C10_bdmumu', 'C10p_bdmumu')
-    Number of polynomial terms: 9
-
 ======================================================================
-
-======================================================================
-✓ Validation successful
+No uncertainty information available.
 ======================================================================
 ```
 
@@ -162,21 +138,38 @@ The tool provides detailed error messages for various failure scenarios:
 ```bash
 # Missing file
 $ python bin/validate-popxf nonexistent.json
-Error: File not found: nonexistent.json
+
+======================================================================
+Reading JSON file: nonexistent.json
+======================================================================
+POPxfIOError
+======================================================================
+
+File not found: nonexistent.json
+
+======================================================================
 
 # Invalid JSON
 $ python bin/validate-popxf invalid.json
-Error: Invalid JSON format:
-  Line 1, Column 13: Expecting value
+
+======================================================================
+Reading JSON file: invalid.json
+======================================================================
+POPxfJSONError
+======================================================================
+
+Invalid JSON format in file: invalid.json
+  Line 1, Column 1: Expecting value
+
+======================================================================
 
 # Schema validation error
 $ python bin/validate-popxf examples/bad/missing_schema.json
+
 ======================================================================
 Reading JSON file: examples/bad/missing_schema.json
 ======================================================================
-
-======================================================================
-POPxf Validation Error (POPxfValidationError)
+POPxfValidationError
 ======================================================================
 
 POPxf JSON data is missing required '$schema' field.
