@@ -16,7 +16,7 @@ from pathlib import Path
 # Add parent directory to path to import parser module
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from validator import POPxfValidationError
+from validator import POPxfIOError, POPxfJSONError, POPxfValidationError
 from parser import POPxfParser, POPxfParserError
 
 
@@ -95,62 +95,31 @@ def print_parser_info(
         If True, display uncertainty details.
     """
     # Print basic info from the info() method
-    print(parser_obj.info())
-    
-    # Additional verbose information
-    if verbose:
-        if parser_obj.mode == 'FOP' and 'observable_expressions' in parser_obj.metadata:
-            print(f"\nObservable Expressions:")
-            for i, (obs, expr) in enumerate(zip( 
-              parser_obj.metadata['observable_names'], 
-              parser_obj.metadata['observable_expressions']
-            )):
-                print(f"  [{obs}] {expr}")
-        
-        if 'reproducibility' in parser_obj.metadata:
-            print(f"\nReproducibility Information:")
-            repro = parser_obj.metadata['reproducibility']
-            if isinstance(repro, dict):
-                for key, value in repro.items():
-                    print(f"  - {key}: {value}")
-            elif isinstance(repro, list):
-                for item in repro:
-                    print(f"  - {item}")
-            else:
-                print(f"  {repro}")
-    
-    # Show polynomial data if requested
-    if show_data:
-        if parser_obj.mode == 'SP' and hasattr(parser_obj, 'observable_central'):
-            print(f"\nObservable Central - Polynomial Coefficients:")
-            for key, value in parser_obj.observable_central.items():
-                print(f"  {key}: {value}")
-        
-        if parser_obj.mode == 'FOP' and hasattr(parser_obj, 'polynomial_central'):
-            print(f"\nPolynomial Central - Coefficients:")
-            for key, value in parser_obj.polynomial_central.items():
-                print(f"  {key}: {value}")
-    
-    # Show detailed uncertainty information if requested
-    if show_uncertainties: 
-        if hasattr(parser_obj, 'observable_uncertainties'):
-            print(f"\nUncertainty Information:")
-            for unc_name, unc_obj in parser_obj.observable_uncertainties.items():
-                print(f"\n'{unc_name}':")
-                print(f"  - Type: {type(unc_obj).__name__}")
-                print(f"  - Number of terms: {len(unc_obj)}")
-                print(f"  - Parameters: {unc_obj.parameters if unc_obj.parameters else 'parameter-independent'}")
-                
-                if show_data:
-                    print(f"  - Coefficients:")
-                    for key, value in unc_obj.items():
-                        print(f"    {key}: {value}")
-        else:
-            print("\nNo uncertainty information available.")
-    # Success message
-    print("✓ Validation successful")
-    print(f"{'='*70}\n")
+    print(
+      parser_obj.info(
+        verbose=verbose,
+        show_data=show_data,
+        show_uncertainties=show_uncertainties
+      )
+    )
+    # print(f"{'='*70}")
 
+    
+
+
+def print_error(e):
+    """
+    Print error information.
+    
+    Parameters
+    ----------
+    e : Exception
+        The exception to print.
+    """
+    print(f"{'='*70}", file=sys.stderr)
+    print(f"{type(e).__name__}", file=sys.stderr)
+    print(f"{'='*70}", file=sys.stderr)
+    print(f"\n{e}\n", file=sys.stderr)
 
 def main():
     """
@@ -167,43 +136,12 @@ def main():
     if args.quiet and args.verbose:
         print("Error: --quiet and --verbose are mutually exclusive", file=sys.stderr)
         return 1
-    
-    # Read JSON file
+
+    # Load & validate POPxf file
     try:
         print(f"\n{'='*70}")
         print(f"Reading JSON file: {args.input_file}")
-        
-        input_path = Path(args.input_file)
-        
-        if not input_path.exists():
-            print(f"{'='*70}", file=sys.stderr)
-            print(f"Error: File not found: {args.input_file}", file=sys.stderr)
-            return 1
-        
-        if not input_path.is_file():
-            print(f"\n{'='*70}", file=sys.stderr)
-            print(f"Error: Not a file: {args.input_file}", file=sys.stderr)
-            return 1
-        
-        with open(input_path, 'r') as f:
-            json_data = json.load(f)
-    
-    except IOError as e:
-        print(f"{'='*70}", file=sys.stderr)
-        print(f"Error: Failed to read file: {e}", file=sys.stderr)
-        return 1
-    
-    except json.JSONDecodeError as e:
-        print(f"{'='*70}", file=sys.stderr)
-        print(f"Error: Invalid JSON format:", file=sys.stderr)
-        print(f"  Line {e.lineno}, Column {e.colno}: {e.msg}", file=sys.stderr)
-        return 1
-    finally:
-        print(f"{'='*70}")
-
-    # Parse POPxf file
-    try:
-        parser_obj = POPxfParser(json_data)
+        parser_obj = POPxfParser.from_json(args.input_file)
         
         # Print information unless quiet mode
         if not args.quiet:
@@ -219,21 +157,9 @@ def main():
             print(f"{'='*70}")
         
         return 0
-    
-    except POPxfValidationError as e:
-        print(f"\n{'='*70}", file=sys.stderr)
-        print(f"POPxf Validation Error ({type(e).__name__})", file=sys.stderr)
-        print(f"{'='*70}", file=sys.stderr)
-        print(f"\n{e}\n", file=sys.stderr)
-        print(f"{'='*70}\n", file=sys.stderr)
-        return 1
-    
-    except POPxfParserError as e:
-        print(f"\n{'='*70}", file=sys.stderr)
-        print("POPxf Parser Error", file=sys.stderr)
-        print(f"{'='*70}", file=sys.stderr)
-        print(f"\n{e}\n", file=sys.stderr)
-        print(f"{'='*70}\n", file=sys.stderr)
+
+    except (POPxfIOError, POPxfJSONError, POPxfValidationError) as e:
+        print_error(e)
         return 1
     
     except Exception as e:
@@ -250,6 +176,8 @@ def main():
         
         print(f"{'='*70}\n", file=sys.stderr)
         return 1
+    # finally:
+    #     print(f"{'='*70}")
 
 
 if __name__ == '__main__':

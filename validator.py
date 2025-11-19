@@ -5,6 +5,7 @@ import json
 import jsonschema
 from io import StringIO
 from ast import literal_eval
+from pathlib import Path
 from jsonschema.exceptions import ValidationError
 from schemas import schemas, validators
 
@@ -63,6 +64,16 @@ class POPxfValidator(object):
     observable_uncertainties : dict of POPxfPolynomialUncertainty, optional
         Dictionary mapping uncertainty source names to uncertainty polynomials.
         Present only if 'observable_uncertainties' exists in data.
+
+    Static Methods
+    --------------
+    open_json(jsonfile)
+        Open and load a JSON file.
+        
+    Class Methods
+    -------------
+    from_json(cls, jsonfile)
+        Create a POPxfValidator instance from a JSON file.
 
     Raises
     ------
@@ -484,8 +495,35 @@ class POPxfValidator(object):
               f"'{poly_name}' contains unrecognized parameters {extra_parameters} "
               "not listed in metadata.parameters."
             )
+        
+    @staticmethod
+    def get_poly_params(poly, degree):
+        """
+        Get the set of parameters used in a polynomial.
 
-    def info(self):
+        Parameters
+        ----------
+        poly : dict
+            Polynomial data as a dictionary mapping keys to coefficient arrays.
+
+        Returns
+        -------
+        set
+            Set of unique parameters used in the polynomial keys.
+        """
+        poly_params = set()
+        for k in poly.keys():
+            tuplekey = literal_eval(k)
+            # handle optional RI specifier
+            if len(tuplekey) ==  degree + 1:
+                params = tuplekey[:-1]
+            else:
+                params = tuplekey
+            poly_params.update([ x for x in params if x != '' ])
+        
+        return sorted(poly_params)
+
+    def info(self, verbose=False, show_data=False, show_uncertainties=False):
         """
         Generate a summary string of the POPxfValidator object's properties.
 
@@ -506,49 +544,175 @@ class POPxfValidator(object):
         
         result.write(f"\nSchema version: {self.schema_version}\n")
 
-        result.write("\nmetadata keys:\n")
-        for key in self.metadata.keys():
-            result.write(f"  - {key}\n")
-        
-        result.write("\ndata keys:\n")
-        for key in self.data.keys():
-            result.write(f"  - {key}\n")
+        if verbose:
+            result.write("\nmetadata keys:\n")
+            for key in self.metadata.keys():
+                result.write(f"  - {key}\n")
+            
+            result.write("\ndata keys:\n")
+            for key in self.data.keys():
+                result.write(f"  - {key}\n")
 
         if self.mode == 'SP':
             result.write("\nMode: Single-Polynomial (SP)\n")
         else:
             result.write("\nMode: Function-Of-Polynomials (FOP)\n")
 
-        result.write(f"Polynomial Order: {self.polynomial_degree}\n")
+        result.write(f"Polynomial Degree: {self.polynomial_degree}\n")
         result.write(f"Length (number of observables): {self.length_observable_names}\n")        
         result.write(f"Observable Names: {self.metadata['observable_names']}\n")
         result.write(f"Parameters: {self.parameters}\n")
         result.write(f"Scale: {self.metadata['scale']} [GeV]\n")
-        if self.mode == 'FOP':
-            result.write("\nFOP data:\n")
-            result.write(f"  - Number of polynomials: {len(self.metadata.get('polynomial_names', []))}\n")
-            result.write("  - Polynomial names: " + ", ".join(self.metadata.get('polynomial_names', [])) + "\n")
-            result.write(f"\nPolynomial Central:\n")
-            result.write(f"  - Number of polynomial terms: {len(self.polynomial_central)}\n")
-            result.write(f"  - Parameters: {self.polynomial_central.parameters}\n")
 
-        if hasattr(self, 'observable_central'):
+        if verbose and self.mode == 'FOP':
+            poly_names = self.metadata['polynomial_names']
+            poly = self.data['polynomial_central']
+            params = self.get_poly_params(poly, self.polynomial_degree)
+            result.write("\nFOP data:\n")
+            result.write(f"  - Number of polynomials: {len(poly_names)}\n")
+            result.write("  - Polynomial names: " + ", ".join(poly_names) + "\n")
+            result.write(f"\nPolynomial Central:\n")
+            result.write(f"  - Number of polynomial terms: {len(poly)}\n")
+            result.write(f"  - Parameters: {params}\n")
+
+            result.write(f"\nObservable Expressions:\n")
+            for i, (obs, expr) in enumerate(zip( 
+              self.metadata['observable_names'], 
+              self.metadata['observable_expressions']
+            )):
+                result.write(f"  [{obs}] {expr}\n")
+
+        if verbose and 'observable_central' in self.data:
+            poly = self.data['observable_central']
+            params = self.get_poly_params(poly, self.polynomial_degree)
             result.write("\nObservable Central:\n")
-            result.write(f"  - Parameters: {self.observable_central.parameters}\n")
-            result.write(f"  - Number of polynomial terms: {len(self.observable_central)}\n")
-            result.write(f"  - Polynomial keys: {list(self.observable_central.keys())[:5]}{'...' if len(self.observable_central) > 5 else ''}\n")
-            
-        if hasattr(self, 'observable_uncertainties'):
+            result.write(f"  - Parameters: {params}\n")
+            result.write(f"  - Number of polynomial terms: {len(poly)}\n")
+            result.write(f"  - Polynomial keys: {list(poly.keys())[:5]}{'...' if len(poly) > 5 else ''}\n")
+
+        result.write(f"\n{'='*70}")
+        # Show polynomial data if requested
+        if show_data:
+            if self.mode == 'SP':
+                poly = self.data['observable_central']
+                path ='data["observable_central"]'
+            else:
+                poly = self.data['polynomial_central']
+                path ='data["polynomial_central"]'
+
+            result.write(f"\nPolynomial Data ({path}):\n")
+            result.write(f"{'='*70}\n")
+            for key, value in poly.items():
+                result.write(f"  {key}: {value}\n")
+            result.write(f"\n{'='*70}")
+
+        # Show detailed uncertainty information if requested
+        if show_uncertainties and 'observable_uncertainties' in self.data:
+            uncs = self.data['observable_uncertainties']
             result.write(f"\nObservable Uncertainties:\n")
-            result.write(f"  - Number of uncertainty sources: {len(self.observable_uncertainties)}\n")
-            for unc_name, unc_obj in self.observable_uncertainties.items():
-                result.write(f"  - '{unc_name}':\n")
-                result.write(f"    Parameters: {unc_obj.parameters}\n")
-                result.write(f"    Number of polynomial terms: {len(unc_obj)}\n")
-        
-        result.write("\n" + "=" * 70)
+            result.write(f"{'='*70}\n")
+            result.write(f"  Number of uncertainty sources: {len(uncs)}\n")
+            for unc_name, unc_obj in uncs.items():
+                result.write(f"  Source '{unc_name}':\n")
+                if isinstance(unc_obj, dict):
+                    params = self.get_poly_params(unc_obj, self.polynomial_degree)
+                    result.write(f"    Parameters: {params}\n")
+                    result.write(f"    Number of polynomial terms: {len(unc_obj)}\n")
+                    if show_data:
+                        result.write(f"    Polynomial data:\n")
+                        for key, value in unc_obj.items():
+                            result.write(f"      {key}: {value}\n")
+                else:
+                    result.write(f"    Parameter-independent uncertainty\n")
+                    if show_data:
+                        result.write(f"    Polynomial data:\n")
+                        result.write(f"      {unc_obj}\n")
+            result.write(f"\n{'='*70}")
+        else:
+            result.write("\nNo uncertainty information available.\n")
+            result.write(f"{'='*70}")
+
+         # Show reproducibility information if verbose
+        if verbose and 'reproducibility' in self.metadata:
+            result.write(f"\nReproducibility Information:\n")
+            result.write(f"{'='*70}\n")
+            repro = self.metadata['reproducibility']
+            for i, item in enumerate(repro, start=1):
+                result.write(f"  Step {i}:\n")
+                for key, value in item.items():
+                    result.write(f"  - {key}: {value}\n")
+            result.write(f"\n{'='*70}")
 
         return result.getvalue()
+        
+    @staticmethod
+    def open_json(jsonfile):
+        """
+        Open and load a POPxf JSON file.
+
+        Parameters
+        ----------
+        jsonfile : str or Path
+            Path to the POPxf JSON file.
+
+        Returns
+        -------
+        dict
+            Loaded JSON data as a dictionary.
+
+        Raises
+        ------
+        POPxfValidatorIOError
+            If there are issues reading the file (e.g., file not found, 
+            permission denied).
+        POPxfValidatorJSONError
+            If the file content is not valid JSON.
+
+        """
+        try:
+            input_path = Path(jsonfile)
+            
+            if not input_path.exists():
+                raise POPxfIOError(f"File not found: {jsonfile}")
+            
+            if not input_path.is_file():
+                raise POPxfIOError(f"Not a file: {jsonfile}")
+            
+            with open(input_path, 'r') as f:
+                json_data = json.load(f)
+        
+        except IOError as e:
+            raise POPxfIOError(
+              f"Failed to read file: {jsonfile}"
+            ) from e
+
+        except json.JSONDecodeError as e:
+            raise POPxfJSONError(
+              f"Invalid JSON format in file: {jsonfile}\n"
+              f"  Line {e.lineno}, Column {e.colno}: {e.msg}"
+            ) from e
+
+        return json_data
+
+    @classmethod
+    def from_json(cls, jsonfile):
+        """
+        Create a POPxfValidator instance from a JSON file.
+
+        Parameters
+        ----------
+        jsonfile : str or Path
+            Path to the POPxf JSON file.
+
+        Returns
+        -------
+        POPxfValidator
+            An instance of POPxfValidator initialized with the JSON data.
+        """
+        json_data = cls.open_json(jsonfile)
+
+        return cls(json_data)
+        
 
 """Exceptions for POPxf JSON validation errors."""
 
@@ -676,8 +840,36 @@ class POPxfParameterSetError(POPxfValidationError):
     --------
     POPxfValidator.validate_polynomial : Polynomial parameter validation method
     """
+
+class POPxfIOError(Exception):
+    """
+    Exception class for POPxf JSON file I/O errors.
+
+    Notes
+    -----
+    Raised when there are issues reading or parsing the input POPxf JSON file,
+    such as file not found, permission denied, or invalid JSON format.
+
+    See Also
+    --------
+    POPxfValidator.open_json : JSON file opening method
+    """
+
+class POPxfJSONError(POPxfIOError):
+    """
+    Exception class for POPxf JSON parsing errors.
+
+    Notes
+    -----
+    Raised when the input POPxf JSON file contains invalid JSON syntax or format.
+
+    See Also
+    --------
+    POPxfValidator.open_json : JSON file opening method
+    """
+
 if __name__ == "__main__":
-    # pass
+    pass
     # import sys
     # example = json.load(open('examples/Gam_Wmunum.json'))
 
@@ -688,14 +880,14 @@ if __name__ == "__main__":
     # example = json.load(open('examples/bad/missing_polynomial_names.json'))
     # example = json.load(open('examples/bad/missing_observable_expressions.json'))
     # example = json.load(open('examples/bad/bad_length_observable_central.json'))
-    example = json.load(open('examples/bad/bad_keys_observable_uncertainties.json'))
-    example = json.load(open('examples/bad/bad_observable_central_scale_array_FOP.json'))
-    example = json.load(open('examples/bad/bad_observable_uncertainties_scale_array_FOP.json'))
+    # example = json.load(open('examples/bad/bad_keys_observable_uncertainties.json'))
+    # example = json.load(open('examples/bad/bad_observable_central_scale_array_FOP.json'))
+    # example = json.load(open('examples/bad/bad_observable_uncertainties_scale_array_FOP.json'))
    # 
     # from glob import glob
     # bad_files = glob('examples/bad/*.json')
-    guy = POPxfValidator(example)
-    print(guy.parameters)
+    # guy = POPxfValidator.from_json('examples/bad/bad_observable_uncertainties_scale_array_FOP.json')
+    # print(guy.parameters)
     
     # print(guy.info())
 
