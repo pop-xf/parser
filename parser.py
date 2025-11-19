@@ -159,7 +159,7 @@ class POPxfParser(POPxfValidator):
                 observable_central = POPxfPolynomial(
                   self.data["observable_central"],
                   degree=self.polynomial_degree,
-                  length=self.length
+                  length=self.length_observable_names
                 )
             except (POPxfPolynomial.init_error) as e:
                 msg = "Error initialising 'observable_central' polynomial data"
@@ -174,7 +174,7 @@ class POPxfParser(POPxfValidator):
                 polynomial_central = POPxfPolynomial(
                   self.data["polynomial_central"],
                   degree=self.polynomial_degree,
-                  length=len(self.metadata["polynomial_names"])
+                  length=self.length_polynomial_names
                 )
             except (POPxfPolynomial.init_error) as e:
                 msg = "Error initialising data['polynomial_central'] polynomial data"
@@ -191,7 +191,7 @@ class POPxfParser(POPxfValidator):
                     observable_uncertainty = POPxfPolynomialUncertainty(
                       v,
                       degree=self.polynomial_degree,
-                      length=self.length 
+                      length=self.length_observable_names
                     )
 
                     self.observable_uncertainties[k] = observable_uncertainty
