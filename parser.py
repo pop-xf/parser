@@ -4,9 +4,9 @@ import numpy as np
 import json
 import jsonschema
 from io import StringIO
-from ast import literal_eval
 from jsonschema.exceptions import ValidationError
 from schemas import schemas, validators
+from validator import POPxfValidator
 from polynomial import POPxfPolynomial, POPxfPolynomialUncertainty
 from validator import POPxfValidator
 # TODO:
@@ -14,9 +14,6 @@ from validator import POPxfValidator
 # implement serialization back to JSON
 # implement uncertainty treatment to get covariance matrices, etc.
 # splitting a file into multiple files
-
-# change to Validator
-# modify info() to not use popxf polynomial
 
 class POPxfParser(POPxfValidator):
     """
@@ -104,21 +101,22 @@ class POPxfParser(POPxfValidator):
 
         super().__init__(json_data)
 
-        # set polynomial data, performs additional validation
+        # set polynomial data, no additional validation needed
         self.set_poly_data()
 
     def set_poly_data(self):
         """
-        Parse and validate polynomial data from the JSON data section.
+        Parse polynomial data from the JSON data section.
 
         Converts polynomial data dictionaries into POPxfPolynomial and 
-        POPxfPolynomialUncertainty objects, performing comprehensive validation
-        beyond what the JSON schema provides. The specific fields parsed depend
-        on the operating mode.
+        POPxfPolynomialUncertainty objects.
+
+        Since the parent POPxfValidator class already performs full validation 
+        of the input data, no additional validation is needed.
 
         Raises
         ------
-        POPxfValidationError
+        POPxfParserError
             If polynomial initialization fails due to invalid keys, values, or
             array lengths, or if polynomials contain parameters not declared in
             metadata.parameters.
@@ -151,6 +149,8 @@ class POPxfParser(POPxfValidator):
         --------
         POPxfPolynomial : Class for polynomial data storage
         POPxfPolynomialUncertainty : Class for uncertainty polynomials
+        raise_polynomial_error : Error message generation
+        check_parameter_subset : Parameter validation
         """
         if self.mode == 'SP':
             # single-polynomial mode
@@ -159,7 +159,7 @@ class POPxfParser(POPxfValidator):
                 observable_central = POPxfPolynomial(
                   self.data["observable_central"],
                   degree=self.polynomial_degree,
-                  length=self.length_observable_names
+                  length=self.length
                 )
             except (POPxfPolynomial.init_error) as e:
                 msg = "Error initialising 'observable_central' polynomial data"
@@ -191,7 +191,7 @@ class POPxfParser(POPxfValidator):
                     observable_uncertainty = POPxfPolynomialUncertainty(
                       v,
                       degree=self.polynomial_degree,
-                      length=self.length_observable_names 
+                      length=self.length 
                     )
 
                     self.observable_uncertainties[k] = observable_uncertainty
@@ -203,7 +203,109 @@ class POPxfParser(POPxfValidator):
                     )
                     self.raise_polynomial_error(e, msg)
 
+    def raise_polynomial_error(self, exception, msg_prefix):
+        """
+        Raise a POPxfValidationError with enhanced messaging for polynomial errors.
 
+        Analyzes the exception chain to determine the root cause and generates
+        a detailed error message with context-specific guidance for fixing the
+        issue.
+
+        Parameters
+        ----------
+        exception : Exception
+            The caught exception from polynomial initialization.
+        msg_prefix : str
+            Prefix describing which polynomial field caused the error.
+
+        Raises
+        ------
+        POPxfValidationError
+            Always raised with an enhanced error message that includes the
+            prefix and a description of the specific validation failure.
+
+        Notes
+        -----
+        The method identifies the root cause by traversing the exception chain
+        and provides specialized messages for:
+        
+        - **Value/Length/Shape errors**: Issues with polynomial coefficient arrays
+          (wrong dimension, incorrect length, non-numeric values)
+        - **Key/KeyOrder errors**: Issues with polynomial keys (wrong format,
+          incorrect degree, improper ordering, invalid RI specifiers)
+        - **Other errors**: Generic error message
+        
+        The expected array length depends on the mode:
+        - SP mode: length of metadata['observable_names']
+        - FOP mode: length of metadata['polynomial_names']
+
+        See Also
+        --------
+        get_poly_data : Method that uses this for error handling
+        """
+        # find root cause
+        causes = [exception.__cause__]
+        while causes[-1] is not None:
+            causes.append(causes[-1].__cause__)
+        last_cause = causes[-2]
+
+        expected_length = (
+          self.length if self.mode=='SP' else 
+          len(self.metadata["polynomial_names"])
+        )
+        # specific messaging depending on cause
+        if isinstance(
+            last_cause, 
+            (POPxfPolynomial.value_error,
+            POPxfPolynomial.length_error, 
+            POPxfPolynomial.shape_error)
+        ):
+            reason = (
+              ":\n Polynomial values should be 1D numerical arrays matching "
+             f"the length ({expected_length}) of "
+              "metadata.observable_names."
+            )
+        elif isinstance(
+            last_cause, 
+            (POPxfPolynomial.key_error, POPxfPolynomial.key_order_error)
+        ):
+            reason = (
+              ":\n Polynomial keys should be stringified, alphabetically "
+             f"ordered tuples with length matching metadata.polynomial_degree "
+             f"({self.polynomial_degree}) and an optional real/imaginary "
+              "specifier string as the last element, of the same length."
+            )
+        else:
+            reason = "."
+
+        raise POPxfValidationError(msg_prefix+reason) from exception
+
+    def check_parameter_subset(self, poly_params, poly_name):
+        """
+        Check that polynomial parameters are a subset of metadata.parameters.
+
+        Validates that all parameters appearing in a polynomial are declared
+        in the metadata.parameters list.
+
+        Parameters
+        ----------
+        poly_params : tuple or list
+            Parameters found in the polynomial (from POPxfPolynomial.parameters).
+        poly_name : str
+            Name/path of the polynomial field being checked (for error messages).
+
+        Raises
+        ------
+        POPxfValidationError
+            If any parameters in poly_params are not listed in metadata.parameters.
+
+        """
+        if not set(poly_params).issubset(self.parameters):
+            diff = set(poly_params).difference(self.parameters)
+            raise POPxfValidationError(
+             f"'{poly_name}' contains unrecognized parameters {diff} "
+              "not listed in metadata.parameters."
+            )
             
 class POPxfParserError(Exception):
     """
@@ -212,45 +314,5 @@ class POPxfParserError(Exception):
     """
 
 if __name__ == "__main__":
-    # pass
-    # import sys
-    # example = json.load(open('examples/Gam_Wmunum.json'))
-
-    # example = json.load(open('examples/R_W_lilj.json'))
-    # example = json.load(open('examples/BR_Bs_mumu_B0_mumu.json'))
-    # example = json.load(open('examples/BR_Bs_mumu.json'))
-    # example = json.load(open('examples/BR_B0_mumu.json'))
-    # example = json.load(open('examples/bad/missing_polynomial_names.json'))
-    # example = json.load(open('examples/bad/missing_observable_expressions.json'))
-    # example = json.load(open('examples/bad/bad_length_observable_central.json'))
-    example = json.load(open('examples/bad/bad_keys_observable_uncertainties.json'))
-    example = json.load(open('examples/bad/bad_observable_central_scale_array_FOP.json'))
-    example = json.load(open('examples/bad/bad_observable_uncertainties_scale_array_FOP.json'))
-    example = json.load(open('examples/bad/missing_tool_name.json'))
-   # 
-    # from glob import glob
-    # bad_files = glob('examples/bad/*.json')
-    guy = POPxfParser(example)
-    print(guy.parameters)
-    
-    # print(guy.info())
-
-    # test_data = {
-    #   "('', '')": [0.22729],
-    #   "('', 'c3pl1')": [-0.0137796],
-    #   "('', 'c3pl2')": [0.0137786],
-    #   "('', 'cll')": [0.0137796],
-    #   "('c3pl1', 'c3pl1')": [0.000208845],
-    #   "('c3pl2', 'c3pl2')": [0.00020885],
-    #   "('cll', 'cll')": [0.00020884],
-    #   "('c3pl1', 'c3pl2')": [-0.00041769],
-    #   "('c3pl1', 'cll')": [-0.00041768],
-    #   "('c3pl2', 'cll')": [0.00041768],
-    #   "('RR', 'c3pl2')": [0.00041768]
-    # }
-
-    # POPxfPolynomial(
-    #   test_data,
-    #   degree=2,
-    #   length=1
-    # )
+    pass
+ 

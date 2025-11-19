@@ -9,23 +9,17 @@ from jsonschema.exceptions import ValidationError
 from schemas import schemas, validators
 
 # TODO:
-# implement evaluate()
 # implement serialization back to JSON
-# implement uncertainty treatment to get covariance matrices, etc.
-# splitting a file into multiple files
-
-# change to Validator
-# modify info() to not use popxf polynomial
 
 class POPxfValidator(object):
     """
-    Parser for POPxf JSON files.
+    Validator for POPxf JSON files.
 
-    This class validates and parses POPxf (Polynomial Observable Prediction 
-    eXchange Format) JSON files, which store a data representation for 
-    polynomials in model parameters. It supports two modes: Single-Polynomial 
-    (SP) mode for   direct observable predictions, and Function-Of-Polynomials 
-    (FOP) mode for predictions expressed as functions of auxiliary polynomials.
+    This class validates POPxf (Polynomial Observable Prediction eXchange 
+    Format) JSON files, which store a data representation for polynomials in 
+    model parameters. It supports two modes: Single-Polynomial (SP) mode for 
+    direct observable predictions, and Function-Of-Polynomials (FOP) mode for 
+    predictions expressed as functions of auxiliary polynomials.
 
     Parameters
     ----------
@@ -54,10 +48,13 @@ class POPxfValidator(object):
     mode : str
         Operating mode, either 'SP' (Single-Polynomial) or 'FOP' 
         (Function-Of-Polynomials).
-    length : int
+    length_observable_names : int
         Number of observables (length of metadata['observable_names']).
+    length_polynomial_names : int
+        Number of polynomials (length of metadata['polynomial_names'] in FOP 
+        mode, set to 0 in SP mode).
     parameters : list
-        List of EFT parameters appearing in the polynomials.
+        List of parameters appearing in the polynomials.
     observable_central : POPxfPolynomial, optional
         Central values for observables in SP mode. Reguired in SP mode.
     polynomial_central : POPxfPolynomial, optional
@@ -69,10 +66,10 @@ class POPxfValidator(object):
 
     Raises
     ------
-    POPxfParserError
-        If the '$schema' field is missing or specifies an unrecognized version.
+    POPxfValidatorError
     POPxfValidationError
-        If the JSON data fails schema validation, has inconsistent field lengths,
+        - If the '$schema' field is missing or specifies an unrecognized version.
+        - If the JSON data fails schema validation, has inconsistent field lengths,
         contains unrecognized parameters, or violates mode-specific constraints.
 
     Notes
@@ -95,7 +92,7 @@ class POPxfValidator(object):
     --------
     POPxfPolynomial : Class for storing polynomial data
     POPxfPolynomialUncertainty : Class for storing uncertainty polynomials
-    POPxfParserError : Base exception class
+    POPxfValidatorError : Base exception class
     POPxfValidationError : Validation error exception class
     """
     
@@ -107,7 +104,7 @@ class POPxfValidator(object):
         try:
             self.schema_version = json_data["$schema"].split('/')[-1]
         except KeyError as e:
-            raise POPxfParserError(
+            raise POPxfValidationError(
               "POPxf JSON data is missing required '$schema' field."
             ) from None
         
@@ -116,7 +113,7 @@ class POPxfValidator(object):
             self.json_schema = schemas[self.schema_version]
         except KeyError:
             allowed_schemas = ', '.join([ f"'{v}'" for v in schemas.keys() ])
-            raise POPxfParserError(
+            raise POPxfValidationError(
               f"POPxf JSON schema version '{self.schema_version}' is not "
               "recognized. Available versions are: "
               f"{allowed_schemas}"
@@ -127,7 +124,7 @@ class POPxfValidator(object):
             self.validator = validators[self.schema_version](self.json_schema)
         except KeyError:
             allowed_validators = ', '.join([ f"'{v}'" for v in validators.keys() ])
-            raise POPxfParserError(
+            raise POPxfValidationError(
               f"Validator for schema version '{self.schema_version}' is not "
               "recognized. Available versions are: "
               f"{allowed_validators}"
@@ -186,7 +183,7 @@ class POPxfValidator(object):
         except ValidationError as e:
             error_message = self.get_validation_error_message(e)
 
-            raise POPxfValidationError(
+            raise POPxfSchemaValidationError(
               "POPxf JSON data does not conform to schema version "
              f"{self.schema_version}:\n{error_message}"
             ) from None
@@ -297,11 +294,11 @@ class POPxfValidator(object):
             If any validations fail.
 
         """
-        # TODO:
-        # - Observable expression lengths has to match observable_names
-        # - 
+
         # validate scale field
         self.validate_scale()
+        # validate FOP-mode observable expressions lengths
+        self.validate_expressions()
         # validate data polynomials
         self.validate_data()
 
@@ -327,7 +324,7 @@ class POPxfValidator(object):
         elif self.mode == 'SP':
             # length matches observable_names
             if len(scale) != len(self.metadata["observable_names"]):
-                raise POPxfValidationError(
+                raise POPxfScaleError(
                     "Lengths of array-valued 'scale' and "
                     "'observable_names' metadata fields must match in "
                     "single-polynomial (SP) mode."
@@ -335,7 +332,7 @@ class POPxfValidator(object):
         elif self.mode == 'FOP':
             # length matches polynomial_names
             if len(scale) != len(self.metadata["polynomial_names"]):
-                raise POPxfValidationError(
+                raise POPxfScaleError(
                     "Lengths of array-valued 'scale' and "
                     "'polynomial_names' metadata fields must match in "
                     "function-of-polynomials (FOP) mode."
@@ -391,6 +388,31 @@ class POPxfValidator(object):
                       f'data["observable_uncertainties"][{k}]'
                     )
 
+    def validate_expressions(self):
+        """
+        Validate observable expressions in FOP mode.
+
+        Checks that the number of observable expressions matches the number of
+        observable names in metadata when operating in function-of-polynomials
+        (FOP) mode.
+
+        Raises
+        ------
+        POPxfValidationError
+            If the number of observable expressions does not match the number
+            of observable names in metadata.
+
+        """
+        if self.mode == 'FOP':
+            num_expressions = len(self.metadata['observable_expressions'])
+            if num_expressions != self.length_observable_names:
+                raise POPxfFOPExpressionError(
+                  "In function-of-polynomials (FOP) mode, the number of "
+                  "observable expressions in 'metadata.observable_expressions' "
+                  "must match the number of observable names in "
+                  "'metadata.observable_names'."
+                )
+
     def validate_polynomial(self, poly, expected_length, poly_name):
         """
         Validate a polynomial's keys and values for consistency. 
@@ -431,7 +453,7 @@ class POPxfValidator(object):
                 params, RI_str = tuplekey[:-1], tuplekey[-1]
             else:
                 ## invalid key length, never raised assuming schema validation passed
-                raise POPxfValidationError(
+                raise POPxfKeyLengthError(
                  f"Error initialising '{poly_name}' polynomial data:\n"
                  f"  Invalid key {k}: number of elements must be either equal to "
                  f"or one greater that the polynomial degree ({self.polynomial_degree})."
@@ -439,7 +461,7 @@ class POPxfValidator(object):
             
             # check key ordering
             if sorted(params) != list(params):
-                raise POPxfValidationError(
+                raise POPxfKeyOrderError(
                   f"Error initialising '{poly_name}' polynomial data:\n"
                   f"  Parameters in {params} must be ordered alphabetically in "
                   f"{tuplekey}."
@@ -447,7 +469,7 @@ class POPxfValidator(object):
             
             # check value length
             if len(v) != expected_length:
-                raise POPxfValidationError(
+                raise POPxfDataLengthError(
                   f"Error initialising '{poly_name}' polynomial data:\n"
                   f'  Polynomial values for key "{k}" must have length '
                   f"{expected_length}, got {len(v)}."
@@ -457,7 +479,7 @@ class POPxfValidator(object):
 
         extra_parameters = (set(poly_params) - {''}) - set(self.parameters)
         if extra_parameters:
-            raise POPxfValidationError(
+            raise POPxfParameterSetError(
               f"Error initialising '{poly_name}' polynomial data:\n"
               f"'{poly_name}' contains unrecognized parameters {extra_parameters} "
               "not listed in metadata.parameters."
@@ -465,7 +487,7 @@ class POPxfValidator(object):
 
     def info(self):
         """
-        Generate a summary string of the POPxfParser object's properties.
+        Generate a summary string of the POPxfValidator object's properties.
 
         Returns
         -------
@@ -479,7 +501,7 @@ class POPxfValidator(object):
         result = StringIO()
 
         result.write("=" * 70 + "\n")
-        result.write("POPxfParser Object Properties\n")
+        result.write(f"{self.__class__.__name__} Object Properties\n")
         result.write("=" * 70 + "\n")
         
         result.write(f"\nSchema version: {self.schema_version}\n")
@@ -527,7 +549,9 @@ class POPxfValidator(object):
         result.write("\n" + "=" * 70)
 
         return result.getvalue()
-            
+
+"""Exceptions for POPxf JSON validation errors."""
+
 class POPxfValidationError(Exception):
     """
     Base exception class for POPxf JSON validation errors.
@@ -547,11 +571,111 @@ class POPxfValidationError(Exception):
 
     See Also
     --------
-    POPxfParser.validate_schema : Schema validation method
-    POPxfParser.get_validation_error_message : Error message formatting
-    POPxfParser.validate_other : Beyond-schema validation method
+    POPxfValidator.validate_schema : Schema validation method
+    POPxfValidator.get_validation_error_message : Error message formatting
+    POPxfValidator.validate_other : Beyond-schema validation method
     """
 
+class POPxfSchemaValidationError(POPxfValidationError):
+    """
+    Exception class for POPxf JSON schema validation errors.
+
+    Notes
+    -----
+    Raised when the input JSON data fails to conform to the POPxf schema
+    specification for the detected schema version. This includes missing required
+    fields, incorrect data types, pattern mismatches, and other structural issues.
+
+    See Also
+    --------
+    POPxfValidator.validate_schema : Schema validation method
+    POPxfValidator.get_validation_error_message : Error message formatting
+    """
+
+class POPxfScaleError(POPxfValidationError):
+    """
+    Exception class for POPxf JSON scale field validation errors.
+
+    Notes
+    -----
+    Raised when the 'scale' field in metadata is inconsistent with the operating
+    mode (SP or FOP) and the lengths of observable_names or polynomial_names.
+
+    See Also
+    --------
+    POPxfValidator.validate_scale : Scale validation method
+    """
+
+class POPxfFOPExpressionError(POPxfValidationError):
+    """
+    Exception class for POPxf JSON FOP expression validation errors.
+
+    Notes
+    -----
+    Raised when the number of observable expressions in metadata does not match
+    the number of observable names when operating in function-of-polynomials (FOP)
+    mode.
+
+    See Also
+    --------
+    POPxfValidator.validate_expressions : FOP expression validation method
+    """
+
+class POPxfKeyLengthError(POPxfValidationError):
+    """
+    Exception class for POPxf JSON data length validation errors.
+
+    Notes
+    -----
+    Raised when polynomial value lengths in the data section do not match the
+    expected lengths based on metadata specifications.
+
+    See Also
+    --------
+    POPxfValidator.validate_polynomial : Polynomial length validation method
+    """
+
+class POPxfKeyOrderError(POPxfValidationError):
+    """
+    Exception class for POPxf JSON data key validation errors.
+
+    Notes
+    -----
+    Raised when polynomial keys in the data section are not ordered 
+    alphabetically according to python sort().
+
+    See Also
+    --------
+    POPxfValidator.validate_polynomial : Polynomial key validation method
+    """
+
+class POPxfDataLengthError(POPxfValidationError):
+    """
+    Exception class for POPxf JSON data length validation errors.
+
+    Notes
+    -----
+    Raised when polynomial value lengths in the data section do not match the
+    expected lengths based on metadata specifications.
+
+    See Also
+    --------
+    POPxfValidator.validate_polynomial : Polynomial length validation method
+    """
+
+class POPxfParameterSetError(POPxfValidationError):
+    """
+    Exception class for POPxf JSON parameter set validation errors.
+
+    Notes
+    -----
+    Raised when polynomial data contains parameters not listed in 
+    metadata.parameters.
+
+    See Also
+    --------
+    POPxfValidator.validate_polynomial : Polynomial parameter validation method
+    """
 if __name__ == "__main__":
     # pass
     # import sys
@@ -570,7 +694,7 @@ if __name__ == "__main__":
    # 
     # from glob import glob
     # bad_files = glob('examples/bad/*.json')
-    guy = POPxfParser(example)
+    guy = POPxfValidator(example)
     print(guy.parameters)
     
     # print(guy.info())

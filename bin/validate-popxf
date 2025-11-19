@@ -171,7 +171,9 @@ def main():
     
     # Read JSON file
     try:
+        print(f"\n{'='*70}")
         print(f"Reading JSON file: {args.input_file}")
+        
         input_path = Path(args.input_file)
         
         if not input_path.exists():
@@ -193,7 +195,9 @@ def main():
         print(f"Error: Invalid JSON format:", file=sys.stderr)
         print(f"  Line {e.lineno}, Column {e.colno}: {e.msg}", file=sys.stderr)
         return 1
-    
+    finally:
+        print(f"{'='*70}")
+
     # Parse POPxf file
     try:
         parser_obj = POPxfParser(json_data)
@@ -214,7 +218,7 @@ def main():
     
     except POPxfValidationError as e:
         print(f"\n{'='*70}", file=sys.stderr)
-        print("POPxf Validation Error", file=sys.stderr)
+        print(f"POPxf Validation Error ({type(e).__name__})", file=sys.stderr)
         print(f"{'='*70}", file=sys.stderr)
         print(f"\n{e}\n", file=sys.stderr)
         print(f"{'='*70}\n", file=sys.stderr)
