@@ -172,7 +172,11 @@ Error: Invalid JSON format:
 # Schema validation error
 $ python bin/validate-popxf examples/bad/missing_schema.json
 ======================================================================
-POPxf Parser Error
+Reading JSON file: examples/bad/missing_schema.json
+======================================================================
+
+======================================================================
+POPxf Validation Error (POPxfValidationError)
 ======================================================================
 
 POPxf JSON data is missing required '$schema' field.

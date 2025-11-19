@@ -148,9 +148,8 @@ def print_parser_info(
         else:
             print("\nNo uncertainty information available.")
     # Success message
-    print("\n" + "=" * 70)
     print("✓ Validation successful")
-    print("=" * 70 + "\n")
+    print(f"{'='*70}\n")
 
 
 def main():
@@ -177,10 +176,12 @@ def main():
         input_path = Path(args.input_file)
         
         if not input_path.exists():
+            print(f"{'='*70}", file=sys.stderr)
             print(f"Error: File not found: {args.input_file}", file=sys.stderr)
             return 1
         
         if not input_path.is_file():
+            print(f"\n{'='*70}", file=sys.stderr)
             print(f"Error: Not a file: {args.input_file}", file=sys.stderr)
             return 1
         
@@ -188,10 +189,12 @@ def main():
             json_data = json.load(f)
     
     except IOError as e:
+        print(f"{'='*70}", file=sys.stderr)
         print(f"Error: Failed to read file: {e}", file=sys.stderr)
         return 1
     
     except json.JSONDecodeError as e:
+        print(f"{'='*70}", file=sys.stderr)
         print(f"Error: Invalid JSON format:", file=sys.stderr)
         print(f"  Line {e.lineno}, Column {e.colno}: {e.msg}", file=sys.stderr)
         return 1
@@ -213,6 +216,7 @@ def main():
         else:
             # In quiet mode, just indicate success
             print(f"✓ {args.input_file} is valid")
+            print(f"{'='*70}")
         
         return 0
     
