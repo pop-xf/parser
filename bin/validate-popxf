@@ -16,7 +16,8 @@ from pathlib import Path
 # Add parent directory to path to import parser module
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from parser import POPxfParser, POPxfParserError, POPxfValidationError
+from validator import POPxfValidationError
+from parser import POPxfParser, POPxfParserError
 
 
 def parse_arguments():

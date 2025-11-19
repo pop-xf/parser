@@ -2,13 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://json.schemastore.org/popxf-1.0.json",
   "$defs": {
-    "monomialKeyPatternConstant": {
-      "type": "object",
-      "minProperties": 1,
-      "maxProperties": 1,
-      "propertyNames": {
-        "pattern": "^\\(\\s*''\\s*,(\\s*'[IR]+'\\s*,?)?\\s*\\)$|^\\(\\s*(''\\s*,\\s*)+''(\\s*,\\s*'[IR]+')?\\s*,?\\s*\\)$"
+    "conditionScaleArrayPolynomial": {
+      "properties": {
+        "metadata": {
+          "required": ["polynomial_names", "scale"],
+          "properties": { "scale": { "type": "array" } }
+        }
       }
+    },
+    "stringifiedTuplePattern": {
+      "pattern": "^\\(\\s*'[^']*'\\s*(,|(,\\s*'[^']*'\\s*)+\\s*,?)\\s*\\)$"
     },
     "monomialKeyPatternDeg1": {
       "type": "object",
@@ -40,8 +43,45 @@
         "pattern": "^\\(\\s*('[^']*'\\s*,\\s*){4}'[^']*'(\\s*,\\s*'[IR]{5}')?\\s*,?\\s*\\)$"
       }
     },
-    "stringifiedTuplePattern": {
-      "pattern": "^\\(\\s*'[^']*'\\s*(,|(,\\s*'[^']*'\\s*)+\\s*,?)\\s*\\)$"
+    "monomialKeyPatternConstantDeg1": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "pattern": "^\\(\\s*''\\s*,\\s*('R'\\s*,?)?\\s*\\)$"
+      }
+    },
+    "monomialKeyPatternConstantDeg2": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "pattern": "^\\(\\s*(''\\s*,\\s*){1}''(\\s*,\\s*'RR')?\\s*,?\\s*\\)$"
+      }
+    },
+    "monomialKeyPatternConstantDeg3": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "pattern": "^\\(\\s*(''\\s*,\\s*){2}''(\\s*,\\s*'RRR')?\\s*,?\\s*\\)$"
+      }
+    },
+    "monomialKeyPatternConstantDeg4": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "pattern": "^\\(\\s*(''\\s*,\\s*){3}''(\\s*,\\s*'RRRR')?\\s*,?\\s*\\)$"
+      }
+    },
+    "monomialKeyPatternConstantDeg5": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": {
+        "pattern": "^\\(\\s*(''\\s*,\\s*){4}''(\\s*,\\s*'RRRRR')?\\s*,?\\s*\\)$"
+      }
     }
   },
   "type": "object",
@@ -618,32 +658,12 @@
     },
     {
       "if": {
-        "properties": {
-          "metadata": {
-            "required": ["polynomial_names", "scale"],
-            "properties": { "scale": { "type": "array" } }
-          }
-        }
+        "$ref": "#/$defs/conditionScaleArrayPolynomial"
       },
       "then": {
         "properties": {
           "data": {
-            "allOf": [
-              { "not": { "required": ["observable_central"] } },
-              {
-                "properties": {
-                  "observable_uncertainties": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "oneOf": [
-                        { "type": "array", "items": { "type": "number" } },
-                        { "$ref": "#/$defs/monomialKeyPatternConstant" }
-                      ]
-                    }
-                  }
-                }
-              }
-            ]
+            "not": { "required": ["observable_central"] }
           }
         }
       }
@@ -669,34 +689,50 @@
         ]
       },
       "then": {
-        "properties": {
-          "data": {
-            "patternProperties": {
-              "^(observable_central|polynomial_central)$": {
-                "$ref": "#/$defs/monomialKeyPatternDeg2"
-              },
-              "^observable_uncertainties$": {
-                "propertyNames": {
-                  "not": {
-                    "$ref": "#/$defs/stringifiedTuplePattern"
-                  }
-                },
-                "additionalProperties": {
-                  "oneOf": [
-                    {
-                      "type": "object",
-                      "$ref": "#/$defs/monomialKeyPatternDeg2"
+        "allOf": [
+          {
+            "properties": {
+              "data": {
+                "patternProperties": {
+                  "^(observable_central|polynomial_central)$": {
+                    "$ref": "#/$defs/monomialKeyPatternDeg2"
+                  },
+                  "^observable_uncertainties$": {
+                    "propertyNames": {
+                      "not": { "$ref": "#/$defs/stringifiedTuplePattern" }
                     },
-                    {
-                      "type": "array",
-                      "items": { "type": "number" }
+                    "additionalProperties": {
+                      "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternDeg2" }
+                      ]
                     }
-                  ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": { "$ref": "#/$defs/conditionScaleArrayPolynomial" },
+            "then": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "observable_uncertainties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternConstantDeg2" }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
           }
-        }
+        ]
       }
     },
     {
@@ -709,33 +745,50 @@
         }
       },
       "then": {
-        "properties": {
-          "data": {
-            "patternProperties": {
-              "^(observable_central|polynomial_central)$": {
-                "$ref": "#/$defs/monomialKeyPatternDeg1"
-              },
-              "^observable_uncertainties$": {
-                "propertyNames": {
-                  "not": {
-                    "$ref": "#/$defs/stringifiedTuplePattern"
-                  }
-                },
-                "additionalProperties": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/$defs/monomialKeyPatternDeg1"
+        "allOf": [
+          {
+            "properties": {
+              "data": {
+                "patternProperties": {
+                  "^(observable_central|polynomial_central)$": {
+                    "$ref": "#/$defs/monomialKeyPatternDeg1"
+                  },
+                  "^observable_uncertainties$": {
+                    "propertyNames": {
+                      "not": { "$ref": "#/$defs/stringifiedTuplePattern" }
                     },
-                    {
-                      "type": "array",
-                      "items": { "type": "number" }
+                    "additionalProperties": {
+                      "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternDeg1" }
+                      ]
                     }
-                  ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": { "$ref": "#/$defs/conditionScaleArrayPolynomial" },
+            "then": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "observable_uncertainties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternConstantDeg1" }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
           }
-        }
+        ]
       }
     },
     {
@@ -748,33 +801,50 @@
         }
       },
       "then": {
-        "properties": {
-          "data": {
-            "patternProperties": {
-              "^(observable_central|polynomial_central)$": {
-                "$ref": "#/$defs/monomialKeyPatternDeg3"
-              },
-              "^observable_uncertainties$": {
-                "propertyNames": {
-                  "not": {
-                    "$ref": "#/$defs/stringifiedTuplePattern"
-                  }
-                },
-                "additionalProperties": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/$defs/monomialKeyPatternDeg3"
+        "allOf": [
+          {
+            "properties": {
+              "data": {
+                "patternProperties": {
+                  "^(observable_central|polynomial_central)$": {
+                    "$ref": "#/$defs/monomialKeyPatternDeg3"
+                  },
+                  "^observable_uncertainties$": {
+                    "propertyNames": {
+                      "not": { "$ref": "#/$defs/stringifiedTuplePattern" }
                     },
-                    {
-                      "type": "array",
-                      "items": { "type": "number" }
+                    "additionalProperties": {
+                      "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternDeg3" }
+                      ]
                     }
-                  ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": { "$ref": "#/$defs/conditionScaleArrayPolynomial" },
+            "then": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "observable_uncertainties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternConstantDeg3" }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
           }
-        }
+        ]
       }
     },
     {
@@ -787,33 +857,50 @@
         }
       },
       "then": {
-        "properties": {
-          "data": {
-            "patternProperties": {
-              "^(observable_central|polynomial_central)$": {
-                "$ref": "#/$defs/monomialKeyPatternDeg4"
-              },
-              "^observable_uncertainties$": {
-                "propertyNames": {
-                  "not": {
-                    "$ref": "#/$defs/stringifiedTuplePattern"
-                  }
-                },
-                "additionalProperties": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/$defs/monomialKeyPatternDeg4"
+        "allOf": [
+          {
+            "properties": {
+              "data": {
+                "patternProperties": {
+                  "^(observable_central|polynomial_central)$": {
+                    "$ref": "#/$defs/monomialKeyPatternDeg4"
+                  },
+                  "^observable_uncertainties$": {
+                    "propertyNames": {
+                      "not": { "$ref": "#/$defs/stringifiedTuplePattern" }
                     },
-                    {
-                      "type": "array",
-                      "items": { "type": "number" }
+                    "additionalProperties": {
+                      "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternDeg4" }
+                      ]
                     }
-                  ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": { "$ref": "#/$defs/conditionScaleArrayPolynomial" },
+            "then": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "observable_uncertainties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternConstantDeg4" }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
           }
-        }
+        ]
       }
     },
     {
@@ -826,33 +913,50 @@
         }
       },
       "then": {
-        "properties": {
-          "data": {
-            "patternProperties": {
-              "^(observable_central|polynomial_central)$": {
-                "$ref": "#/$defs/monomialKeyPatternDeg5"
-              },
-              "^observable_uncertainties$": {
-                "propertyNames": {
-                  "not": {
-                    "$ref": "#/$defs/stringifiedTuplePattern"
-                  }
-                },
-                "additionalProperties": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/$defs/monomialKeyPatternDeg5"
+        "allOf": [
+          {
+            "properties": {
+              "data": {
+                "patternProperties": {
+                  "^(observable_central|polynomial_central)$": {
+                    "$ref": "#/$defs/monomialKeyPatternDeg5"
+                  },
+                  "^observable_uncertainties$": {
+                    "propertyNames": {
+                      "not": { "$ref": "#/$defs/stringifiedTuplePattern" }
                     },
-                    {
-                      "type": "array",
-                      "items": { "type": "number" }
+                    "additionalProperties": {
+                      "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternDeg5" }
+                      ]
                     }
-                  ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": { "$ref": "#/$defs/conditionScaleArrayPolynomial" },
+            "then": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "observable_uncertainties": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          { "type": "array", "items": { "type": "number" } },
+                          { "$ref": "#/$defs/monomialKeyPatternConstantDeg5" }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
           }
-        }
+        ]
       }
     }
   ]
